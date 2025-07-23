@@ -2,7 +2,91 @@ import subprocess
 import re
 import os
 
-def run_ffmpeg(input_path, output_path, progress_callback=None):
+def get_resolution_bitrates():
+    """Get bitrate settings based on resolution"""
+    return {
+        "1080p": "1500k",  # 1.5 MB/s for 1080p
+        "720p": "1000k",   # 1 MB/s for 720p  
+        "480p": "750k",    # 750 KB/s for 480p
+        "360p": "500k"     # 500 KB/s for 360p
+    }
+
+def detect_resolution(input_path):
+    """Detect video resolution using ffprobe"""
+    try:
+        cmd = [
+            "ffprobe", "-v", "quiet", "-print_format", "json", 
+            "-show_streams", "-select_streams", "v:0", input_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            import json
+            data = json.loads(result.stdout)
+            if data.get("streams"):
+                width = data["streams"][0].get("width", 0)
+                height = data["streams"][0].get("height", 0)
+                
+                # Determine resolution category based on height
+                if height >= 1080:
+                    return "1080p", f"{width}x{height}"
+                elif height >= 720:
+                    return "720p", f"{width}x{height}"
+                elif height >= 480:
+                    return "480p", f"{width}x{height}"
+                else:
+                    return "360p", f"{width}x{height}"
+        
+        # Default fallback
+        return "720p", "unknown"
+        
+    except Exception as e:
+        print(f"Error detecting resolution: {e}")
+        return "720p", "unknown"
+
+def get_ffmpeg_preset(preset_name):
+    """Get FFmpeg settings based on preset name - all using x265 with resolution-based bitrates"""
+    presets = {
+        "ultrafast": {
+            "codec": "libx265",
+            "preset": "ultrafast", 
+            "pix_fmt": "yuv420p",
+            "extra_args": ["-tune", "fastdecode"]
+        },
+        "superfast": {
+            "codec": "libx265",
+            "preset": "superfast",
+            "pix_fmt": "yuv420p",
+            "extra_args": []
+        },
+        "veryfast": {
+            "codec": "libx265",
+            "preset": "veryfast",
+            "pix_fmt": "yuv420p",
+            "extra_args": []
+        },
+        "fast": {
+            "codec": "libx265",
+            "preset": "fast",
+            "pix_fmt": "yuv420p",
+            "extra_args": []
+        },
+        "medium": {
+            "codec": "libx265",
+            "preset": "medium",
+            "pix_fmt": "yuv420p",
+            "extra_args": []
+        },
+        "slow_hq": {
+            "codec": "libx265",
+            "preset": "slow",
+            "pix_fmt": "yuv420p10le",
+            "extra_args": []
+        }
+    }
+    return presets.get(preset_name, presets["fast"])
+
+def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fast"):
     # Check if input file exists
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -10,17 +94,40 @@ def run_ffmpeg(input_path, output_path, progress_callback=None):
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
+    # Detect video resolution and get appropriate bitrate
+    resolution_category, actual_resolution = detect_resolution(input_path)
+    bitrates = get_resolution_bitrates()
+    target_bitrate = bitrates[resolution_category]
+    
+    # Get preset settings
+    preset_config = get_ffmpeg_preset(preset_name)
+    
+    if progress_callback:
+        progress_callback(5)  # Initial progress
+    
+    # Build command with x265 and resolution-based bitrates
     command = [
         "ffmpeg",
         "-i", input_path,
-        "-c:v", "libx265",
-        "-preset", "slow",
-        "-crf", "28",
-        "-pix_fmt", "yuv420p10le",
-        "-c:a", "copy",
-        "-y",  # Overwrite output file
-        output_path
+        "-c:v", preset_config["codec"],
+        "-preset", preset_config["preset"],
+        "-b:v", target_bitrate,  # Use bitrate instead of CRF
+        "-maxrate", target_bitrate,  # Maximum bitrate 
+        "-bufsize", f"{int(target_bitrate.rstrip('k')) * 2}k",  # Buffer size = 2x bitrate
+        "-pix_fmt", preset_config["pix_fmt"],
+        "-c:a", "aac",  # Use AAC audio codec for better compatibility
+        "-b:a", "128k",  # Audio bitrate
+        "-movflags", "+faststart",  # Optimize for web streaming
+        "-threads", "0",  # Use all available CPU cores
     ]
+    
+    # Add extra arguments if any
+    command.extend(preset_config["extra_args"])
+    
+    # Add output file and overwrite flag
+    command.extend(["-y", output_path])
+    
+    print(f"Encoding {actual_resolution} video with {target_bitrate} bitrate using {preset_config['codec']} {preset_config['preset']} preset")
 
     try:
         process = subprocess.Popen(

@@ -74,13 +74,13 @@ async def browse_directory(request: Request, path: str = ""):
         })
 
 @app.post("/encode")
-async def start_encoding(background_tasks: BackgroundTasks, file_path: str = Form(...)):
+async def start_encoding(background_tasks: BackgroundTasks, file_path: str = Form(...), preset: str = Form("fast")):
     try:
         # Extract filename from path for display
         filename = file_path.split('/')[-1]
         
         # Initialize job status
-        job_status[filename] = {"status": "downloading", "log": "Starting download...\n", "percent": 0}
+        job_status[filename] = {"status": "downloading", "log": f"Starting download with preset: {preset}...\n", "percent": 0}
         
         input_path = f"./input/{filename}"
         output_filename = f"{filename.rsplit('.', 1)[0]}_encoded.mkv"
@@ -100,7 +100,7 @@ async def start_encoding(background_tasks: BackgroundTasks, file_path: str = For
                 def progress_callback(percent):
                     update_progress(filename, percent)
                 
-                return_code = run_ffmpeg(input_path, output_path, progress_callback=progress_callback)
+                return_code = run_ffmpeg(input_path, output_path, progress_callback=progress_callback, preset_name=preset)
                 
                 if return_code == 0:
                     job_status[filename]["log"] += "Encoding completed successfully.\n"

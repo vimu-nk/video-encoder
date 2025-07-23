@@ -109,6 +109,37 @@
 				<div class="loading">Loading files...</div>
 			</div>
 
+			<div style="margin: 15px 0">
+				<label
+					for="preset"
+					style="
+						display: block;
+						margin-bottom: 5px;
+						font-weight: bold;
+					"
+					>Encoding Preset:</label
+				>
+				<select
+					name="preset"
+					id="preset"
+					style="padding: 5px; width: 200px"
+				>
+					<option value="ultrafast">Ultra Fast (x265)</option>
+					<option value="superfast">Super Fast (x265)</option>
+					<option value="veryfast">Very Fast (x265)</option>
+					<option value="fast" selected>
+						Fast (x265 - Recommended)
+					</option>
+					<option value="medium">Medium (x265)</option>
+					<option value="slow_hq">Slow HQ (x265 10-bit)</option>
+				</select>
+				<div style="font-size: 12px; color: #666; margin-top: 3px">
+					Using x265 codec with resolution-based bitrates:<br />
+					• 1080p: 1.5 MB/s • 720p: 1 MB/s • 480p: 750 KB/s • 360p:
+					500 KB/s
+				</div>
+			</div>
+
 			<button type="submit" id="encodeBtn" disabled>
 				Start Encoding Selected File
 			</button>
