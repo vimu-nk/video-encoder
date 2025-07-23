@@ -1,49 +1,49 @@
-from fastapi import FastAPI, Request, BackgroundTasks, Form
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from pathlib import Path
-from .bunny_client import list_files, download_file, upload_file
-from .ffmpeg_worker import encode_to_hevc
+import os
+
+from .ffmpeg_worker import run_ffmpeg
 
 app = FastAPI()
-templates = Jinja2Templates(directory="app/templates")
 
-BASE_DIR = Path("/tmp/videos")
-INPUT_DIR = BASE_DIR / "input"
-OUTPUT_DIR = BASE_DIR / "output"
-INPUT_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# Optional static files
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Global progress store (simplified for 1 task)
+progress = {"status": "idle", "percent": 0, "file": ""}
 
-job_status = {}
+# CORS if calling from a browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    files = await list_files()
-    return templates.TemplateResponse("dashboard.html", {"request": request, "files": files})
+def update_progress(p):
+    progress["percent"] = p
+    progress["status"] = "encoding"
 
 @app.post("/encode")
-async def start_encoding(request: Request, background_tasks: BackgroundTasks, filename: str = Form(...)):
-    input_path = INPUT_DIR / filename
-    output_path = OUTPUT_DIR / f"{filename.rsplit('.',1)[0]}.mkv"
+def start_encoding(filename: str, background_tasks: BackgroundTasks):
+    input_path = f"./input/{filename}"
+    output_path = f"./output/{filename.rsplit('.', 1)[0]}.mkv"
 
-    # Download file from source zone
-    download_file(filename, input_path)
+    if not os.path.exists(input_path):
+        return {"error": "File not found."}
 
-    def task():
-        job_status[filename] = {"status": "encoding", "log": ""}
-        result = encode_to_hevc(str(input_path), str(output_path))
-        if result.returncode == 0:
-            upload_file(output_path, output_path.name)
-            job_status[filename] = {"status": "done", "log": result.stdout.decode()}
-        else:
-            job_status[filename] = {"status": "error", "log": result.stderr.decode()}
+    def encode_job():
+        progress["file"] = filename
+        progress["percent"] = 0
+        progress["status"] = "encoding"
+        run_ffmpeg(input_path, output_path, progress_callback=update_progress)
+        progress["status"] = "done"
 
-    background_tasks.add_task(task)
-    return {"message": "Encoding started", "file": filename}
+    background_tasks.add_task(encode_job)
+    return {"message": "Encoding started."}
 
-@app.get("/status", response_class=HTMLResponse)
-async def get_status(request: Request):
-    return templates.TemplateResponse("status.html", {"request": request, "status": job_status})
+@app.get("/status")
+def get_status():
+    return progress
