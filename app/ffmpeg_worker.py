@@ -111,7 +111,9 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
         raise FileNotFoundError(f"Input file not found: {input_path}")
     
     # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    output_dir = os.path.dirname(output_path)
+    if output_dir:  # Only create directory if there is one
+        os.makedirs(output_dir, exist_ok=True)
     
     # Get CPU information for optimal threading
     cpu_info = get_cpu_info()
@@ -130,11 +132,12 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
     # Build command with x265 and maximum CPU utilization
     command = [
         "ffmpeg",
-        "-i", input_path,
         
-        # Hardware acceleration (try to use if available)
+        # Hardware acceleration (try to use if available) - MUST be before input
         "-hwaccel", "auto",
         "-hwaccel_output_format", "auto",
+        
+        "-i", input_path,
         
         # Video encoding settings
         "-c:v", preset_config["codec"],
