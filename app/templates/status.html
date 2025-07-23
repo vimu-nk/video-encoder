@@ -2,18 +2,116 @@
 <html>
 	<head>
 		<title>Encoding Status</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				margin: 40px;
+			}
+			.job {
+				margin: 20px 0;
+				padding: 15px;
+				border: 1px solid #ddd;
+				border-radius: 5px;
+			}
+			.status-idle {
+				background-color: #f9f9f9;
+			}
+			.status-downloading {
+				background-color: #e3f2fd;
+			}
+			.status-encoding {
+				background-color: #fff3e0;
+			}
+			.status-uploading {
+				background-color: #f3e5f5;
+			}
+			.status-completed {
+				background-color: #e8f5e8;
+			}
+			.status-failed {
+				background-color: #ffebee;
+			}
+			.log {
+				background: #f5f5f5;
+				padding: 10px;
+				margin: 10px 0;
+				font-family: monospace;
+				white-space: pre-wrap;
+				max-height: 200px;
+				overflow-y: auto;
+			}
+			.progress {
+				width: 100%;
+				background-color: #f0f0f0;
+				border-radius: 3px;
+				overflow: hidden;
+				margin: 10px 0;
+			}
+			.progress-bar {
+				height: 20px;
+				background-color: #4caf50;
+				transition: width 0.3s ease;
+			}
+			button {
+				background: #007cba;
+				color: white;
+				padding: 10px 20px;
+				border: none;
+				cursor: pointer;
+				text-decoration: none;
+				display: inline-block;
+			}
+			button:hover {
+				background: #005a87;
+			}
+		</style>
+		<script>
+			// Auto-refresh page every 5 seconds if there are active jobs
+			setTimeout(function () {
+				const hasActiveJobs = document.querySelector(
+					".status-downloading, .status-encoding, .status-uploading"
+				);
+				if (hasActiveJobs) {
+					window.location.reload();
+				}
+			}, 5000);
+		</script>
 	</head>
 	<body>
 		<h1>Job Status</h1>
-		<ul>
-			{% for filename, stat in status.items() %}
-			<li>
-				<strong>{{ filename }}:</strong> {{ stat.status }}<br />
-				<pre>{{ stat.log }}</pre>
-			</li>
-			{% endfor %}
-		</ul>
+
+		{% if status %} {% for filename, job in status.items() %}
+		<div class="job status-{{ job.status }}">
+			<h3>{{ filename }}</h3>
+			<p><strong>Status:</strong> {{ job.status|title }}</p>
+
+			{% if job.percent %}
+			<div class="progress">
+				<div
+					class="progress-bar"
+					style="width: {{ job.percent }}%"
+				></div>
+			</div>
+			<p>Progress: {{ job.percent }}%</p>
+			{% endif %} {% if job.log %}
+			<div class="log">{{ job.log }}</div>
+			{% endif %}
+		</div>
+		{% endfor %} {% else %}
+		<p>No encoding jobs found.</p>
+		{% endif %}
+
 		<br />
-		<a href="/">Back to Dashboard</a>
+		<a
+			href="/"
+			style="
+				background: #007cba;
+				color: white;
+				padding: 10px 20px;
+				text-decoration: none;
+				border-radius: 3px;
+			"
+			>Back to Dashboard</a
+		>
 	</body>
 </html>

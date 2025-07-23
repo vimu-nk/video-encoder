@@ -2,24 +2,71 @@
 <html>
 	<head>
 		<title>Video Encoder Dashboard</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				margin: 40px;
+			}
+			.error {
+				color: red;
+				background: #fee;
+				padding: 10px;
+				border: 1px solid red;
+				margin: 10px 0;
+			}
+			.file-list {
+				margin: 20px 0;
+			}
+			.file-item {
+				margin: 10px 0;
+			}
+			button {
+				background: #007cba;
+				color: white;
+				padding: 10px 20px;
+				border: none;
+				cursor: pointer;
+			}
+			button:hover {
+				background: #005a87;
+			}
+			button:disabled {
+				background: #ccc;
+				cursor: not-allowed;
+			}
+		</style>
 	</head>
 	<body>
-		<h1>Available Files on Source Storage</h1>
+		<h1>Video Encoder Dashboard</h1>
+
+		{% if error %}
+		<div class="error"><strong>Error:</strong> {{ error }}</div>
+		{% endif %} {% if files %}
+		<h2>Available Files on Source Storage</h2>
 		<form method="post" action="/encode">
-			{% for file in files %}
-			<label>
-				<input
-					type="radio"
-					name="filename"
-					value="{{ file['ObjectName'] }}"
-					required
-				/>
-				{{ file['ObjectName'] }} </label
-			><br />
-			{% endfor %}
+			<div class="file-list">
+				{% for file in files %}
+				<div class="file-item">
+					<label>
+						<input
+							type="radio"
+							name="filename"
+							value="{{ file['ObjectName'] }}"
+							required
+						/>
+						{{ file['ObjectName'] }} ({{ (file['Length'] / 1024 /
+						1024) | round(2) }} MB)
+					</label>
+				</div>
+				{% endfor %}
+			</div>
 			<br />
 			<button type="submit">Start Encoding</button>
 		</form>
+		{% else %}
+		<p>No files available or unable to connect to source storage.</p>
+		{% endif %}
+
 		<br />
 		<a href="/status">Check Job Status</a>
 	</body>
