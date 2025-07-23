@@ -73,14 +73,137 @@ A web-based video encoding platform that downloads videos from Bunny CDN source 
 
 3. **Run the application:**
 
+    **For development/testing:**
+
     ```bash
     python run.py
+    ```
+
+    **For background service (keeps running after terminal closes):**
+
+    Windows (PowerShell):
+
+    ```powershell
+    .\service_manager.ps1 -Start
+    ```
+
+    Windows (Simple menu):
+
+    ```cmd
+    manage_service.bat
+    ```
+
+    Cross-platform:
+
+    ```bash
+    python daemon.py start
     ```
 
 4. **Access the dashboard:**
    Open [http://localhost:8000](http://localhost:8000) in your browser
 
-## Configuration
+## Running as Background Service
+
+The platform can run as a background service that continues running even after you close the terminal.
+
+### Windows Options:
+
+1. **PowerShell Service Manager** (Recommended):
+
+    ```powershell
+    .\service_manager.ps1 -Start    # Start service
+    .\service_manager.ps1 -Status   # Check status
+    .\service_manager.ps1 -Stop     # Stop service
+    ```
+
+2. **Interactive Menu**:
+
+    ```cmd
+    manage_service.bat
+    ```
+
+3. **Cross-platform Daemon**:
+    ```cmd
+    python daemon.py start
+    ```
+
+### Linux/Unix Options:
+
+1. **Python Daemon**:
+
+    ```bash
+    python3 daemon.py start
+    python3 daemon.py status
+    python3 daemon.py stop
+    ```
+
+2. **Systemd Service** (see `BACKGROUND_SERVICE.md` for details)
+
+For complete background service documentation, see: **[BACKGROUND_SERVICE.md](BACKGROUND_SERVICE.md)**
+
+## DigitalOcean Ubuntu Deployment
+
+For production deployment on DigitalOcean Ubuntu droplets:
+
+### Quick Deploy
+
+```bash
+# Download and run the deployment script
+wget https://raw.githubusercontent.com/your-username/video-encoder/main/deploy.sh
+chmod +x deploy.sh
+sudo ./deploy.sh
+```
+
+### Manual Steps
+
+1. **Prepare server:**
+
+    ```bash
+    sudo apt update && sudo apt upgrade -y
+    sudo apt install python3 python3-pip python3-venv git nginx ffmpeg -y
+    ```
+
+2. **Deploy application:**
+
+    ```bash
+    sudo adduser --system --group --home /opt/video-encoder video-encoder
+    sudo -u video-encoder git clone https://github.com/your-username/video-encoder.git /opt/video-encoder/app
+    cd /opt/video-encoder/app
+    sudo -u video-encoder python3 -m venv /opt/video-encoder/venv
+    sudo -u video-encoder /opt/video-encoder/venv/bin/pip install -r requirements.txt
+    ```
+
+3. **Configure service:**
+
+    ```bash
+    sudo cp video-encoder.service /etc/systemd/system/
+    sudo systemctl enable video-encoder
+    sudo systemctl start video-encoder
+    ```
+
+4. **Set up reverse proxy:**
+    ```bash
+    sudo cp nginx-video-encoder /etc/nginx/sites-available/video-encoder
+    sudo ln -s /etc/nginx/sites-available/video-encoder /etc/nginx/sites-enabled/
+    sudo systemctl reload nginx
+    ```
+
+### Management Commands
+
+```bash
+# Service management
+sudo systemctl start|stop|restart video-encoder
+sudo journalctl -u video-encoder -f
+
+# Application management (after deployment)
+video-encoder-manage start|stop|restart|status|logs|update
+video-encoder-manage ssl your-domain.com
+
+# Health monitoring
+/opt/video-encoder/app/health_check.sh
+```
+
+For detailed Ubuntu deployment guide, see: **[UBUNTU_DEPLOYMENT.md](UBUNTU_DEPLOYMENT.md)**
 
 Edit `.env` file with your Bunny CDN credentials:
 
