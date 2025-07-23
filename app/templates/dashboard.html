@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Video Encoder Dashboard</title>
+	</head>
+	<body>
+		<h1>Available Files on Source Storage</h1>
+		<form method="post" action="/encode">
+			{% for file in files %}
+			<label>
+				<input
+					type="radio"
+					name="filename"
+					value="{{ file['ObjectName'] }}"
+					required
+				/>
+				{{ file['ObjectName'] }} </label
+			><br />
+			{% endfor %}
+			<br />
+			<button type="submit">Start Encoding</button>
+		</form>
+		<br />
+		<a href="/status">Check Job Status</a>
+	</body>
+</html>

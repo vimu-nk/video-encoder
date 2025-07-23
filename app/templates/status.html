@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Encoding Status</title>
+	</head>
+	<body>
+		<h1>Job Status</h1>
+		<ul>
+			{% for filename, stat in status.items() %}
+			<li>
+				<strong>{{ filename }}:</strong> {{ stat.status }}<br />
+				<pre>{{ stat.log }}</pre>
+			</li>
+			{% endfor %}
+		</ul>
+		<br />
+		<a href="/">Back to Dashboard</a>
+	</body>
+</html>
