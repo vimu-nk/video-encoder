@@ -227,17 +227,17 @@
 						if (result.success) {
 							// Show success message
 							alert(
-								`✅ Job added to queue successfully!\n\nJob ID: ${result.job_id}\nFile: ${result.file_path}\nPreset: ${result.preset}\n\nCheck the logs page to monitor progress.`
+								`✅ Encoding job started!\n\nFile: ${result.filename}\nPreset: ${result.preset}\n\nRedirecting to status page to monitor progress.`
 							);
 
-							// Optionally redirect to logs page
+							// Redirect to logs page
 							setTimeout(() => {
 								window.location.href = "/logs";
-							}, 2000);
+							}, 1500);
 						} else {
 							// Show error message
 							alert(
-								`❌ Failed to add job to queue:\n${result.error}`
+								`❌ Failed to start encoding job:\n${result.error}`
 							);
 						}
 					} catch (error) {

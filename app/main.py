@@ -5,22 +5,11 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 import os
 import asyncio
-from contextlib import asynccontextmanager
 
 from .ffmpeg_worker import run_ffmpeg
 from .bunny_client import list_files, download_file, upload_file
-from .queue_manager import job_queue, get_queue_stats, JobStatus
-from .queue_processor import queue_processor
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    queue_processor.start()
-    yield
-    # Shutdown
-    queue_processor.stop()
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 # Templates
 templates = Jinja2Templates(directory="app/templates")
@@ -33,6 +22,9 @@ os.makedirs("output", exist_ok=True)
 if os.path.isdir("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Simple job status tracking (single job at a time)
+current_job = {"status": "idle", "log": "", "progress": 0, "filename": "", "error": None}
+
 # CORS if calling from a browser
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +32,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def update_job_status(status, log_message="", progress=None, error=None):
+    """Update the current job status"""
+    current_job["status"] = status
+    if log_message:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        current_job["log"] += f"[{timestamp}] {log_message}\n"
+    if progress is not None:
+        current_job["progress"] = progress
+    if error:
+        current_job["error"] = error
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, path: str = ""):
@@ -75,17 +79,34 @@ async def browse_directory(request: Request, path: str = ""):
         })
 
 @app.post("/encode")
-async def start_encoding(file_path: str = Form(...), preset: str = Form("fast")):
+async def start_encoding(background_tasks: BackgroundTasks, file_path: str = Form(...), preset: str = Form("fast")):
     try:
-        # Add job to queue instead of processing immediately
-        job_id = job_queue.add_job(file_path, preset)
+        # Check if another job is already running
+        if current_job["status"] not in ["idle", "completed", "failed"]:
+            return JSONResponse({
+                "success": False,
+                "error": "Another encoding job is already in progress. Please wait for it to complete."
+            }, status_code=409)
+        
+        # Extract filename from path for display
+        filename = file_path.split('/')[-1]
+        
+        # Initialize job status
+        current_job["filename"] = filename
+        current_job["status"] = "queued"
+        current_job["log"] = f"Job queued for {filename} with preset {preset}\n"
+        current_job["progress"] = 0
+        current_job["error"] = None
+        
+        # Start encoding in background
+        background_tasks.add_task(process_encoding_job, file_path, preset, filename)
         
         return JSONResponse({
             "success": True,
-            "message": f"Job added to queue successfully",
-            "job_id": job_id,
-            "file_path": file_path,
-            "preset": preset
+            "message": f"Encoding job started for {filename}",
+            "filename": filename,
+            "preset": preset,
+            "redirect_url": "/logs"
         })
         
     except Exception as e:
@@ -94,72 +115,81 @@ async def start_encoding(file_path: str = Form(...), preset: str = Form("fast"))
             "error": str(e)
         }, status_code=500)
 
-# Queue management endpoints
-@app.get("/queue")
-async def get_queue_status():
-    """Get current queue status"""
-    stats = get_queue_stats()
-    jobs = job_queue.get_all_jobs()
-    
-    # Convert jobs to dict format for JSON response
-    jobs_data = []
-    for job in jobs:
-        job_data = {
-            "id": job.id,
-            "file_path": job.file_path,
-            "preset": job.preset,
-            "status": job.status.value,
-            "created_at": job.created_at,
-            "started_at": job.started_at,
-            "completed_at": job.completed_at,
-            "progress": job.progress,
-            "log": job.log,
-            "error": job.error
-        }
-        jobs_data.append(job_data)
-    
-    return {
-        "stats": stats,
-        "jobs": jobs_data
-    }
+def process_encoding_job(file_path: str, preset: str, filename: str):
+    """Process a single encoding job"""
+    try:
+        input_path = f"./input/{filename}"
+        output_filename = f"{filename.rsplit('.', 1)[0]}_encoded.mkv"
+        output_path = f"./output/{output_filename}"
+        
+        # Create directories if they don't exist
+        os.makedirs("./input", exist_ok=True)
+        os.makedirs("./output", exist_ok=True)
+        
+        # Step 1: Download
+        update_job_status("downloading", "Starting download from source storage...")
+        download_file(file_path, input_path)
+        update_job_status("downloading", "Download completed successfully", progress=30)
+        
+        # Step 2: Encode
+        update_job_status("encoding", f"Starting encoding with preset: {preset}")
+        
+        def progress_callback(percent):
+            # Map encoding progress to overall progress (30% to 90%)
+            overall_progress = 30 + int((percent / 100) * 60)
+            update_job_status("encoding", f"Encoding progress: {percent}%", progress=overall_progress)
+        
+        return_code = run_ffmpeg(input_path, output_path, progress_callback=progress_callback, preset_name=preset)
+        
+        if return_code != 0:
+            raise Exception(f"FFmpeg encoding failed with return code: {return_code}")
+        
+        update_job_status("encoding", "Encoding completed successfully", progress=90)
+        
+        # Step 3: Upload
+        update_job_status("uploading", "Starting upload to destination storage...")
+        upload_file(output_path, output_filename)
+        update_job_status("uploading", "Upload completed successfully", progress=95)
+        
+        # Step 4: Cleanup
+        if os.path.exists(input_path):
+            os.remove(input_path)
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        
+        update_job_status("completed", "Job completed successfully. Local files cleaned up.", progress=100)
+        
+    except Exception as e:
+        error_msg = f"Job failed: {str(e)}"
+        update_job_status("failed", error_msg, error=str(e))
+        
+        # Cleanup on failure
+        try:
+            if os.path.exists(input_path):
+                os.remove(input_path)
+            if os.path.exists(output_path):
+                os.remove(output_path)
+        except:
+            pass  # Ignore cleanup errors
 
-@app.get("/job/{job_id}")
-async def get_job_status(job_id: str):
-    """Get status of a specific job"""
-    job = job_queue.get_job(job_id)
-    if not job:
-        return JSONResponse({"error": "Job not found"}, status_code=404)
-    
-    return {
-        "id": job.id,
-        "file_path": job.file_path,
-        "preset": job.preset,
-        "status": job.status.value,
-        "created_at": job.created_at,
-        "started_at": job.started_at,
-        "completed_at": job.completed_at,
-        "progress": job.progress,
-        "log": job.log,
-        "error": job.error
-    }
-
-@app.get("/status", response_class=HTMLResponse)
-async def status_page(request: Request):
-    """Legacy status page - now redirects to logs"""
-    return RedirectResponse(url="/logs", status_code=301)
+# Simple status endpoints
+@app.get("/job-status")
+async def get_current_job_status():
+    """Get current job status"""
+    return current_job
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
-    """New logs page showing queue status and job history"""
-    return templates.TemplateResponse("logs.html", {"request": request})
+    """Logs page showing current job status"""
+    return templates.TemplateResponse("simple_logs.html", {"request": request})
+
+@app.get("/status", response_class=HTMLResponse)
+async def status_page(request: Request):
+    """Legacy status page - redirects to logs"""
+    return RedirectResponse(url="/logs", status_code=301)
 
 # API endpoints for AJAX calls
-@app.get("/api/queue")
-async def api_get_queue():
-    """API endpoint for getting queue data"""
-    return await get_queue_status()
-
-@app.get("/api/job/{job_id}")
-async def api_get_job(job_id: str):
-    """API endpoint for getting specific job data"""
-    return await get_job_status(job_id)
+@app.get("/api/status")
+async def api_get_status():
+    """API endpoint for getting current job status"""
+    return current_job

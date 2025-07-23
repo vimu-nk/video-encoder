@@ -1,6 +1,25 @@
 import subprocess
 import re
 import os
+import multiprocessing
+
+def get_cpu_info():
+    """Get CPU information for optimal threading"""
+    try:
+        cpu_count = multiprocessing.cpu_count()
+        # For x265, optimal thread count is usually CPU cores * 1.5 to 2
+        optimal_threads = min(cpu_count * 2, 32)  # Cap at 32 threads
+        return {
+            "cpu_count": cpu_count,
+            "optimal_threads": optimal_threads,
+            "pool_threads": max(1, cpu_count // 2)  # For frame pools
+        }
+    except:
+        return {
+            "cpu_count": 4,
+            "optimal_threads": 8,
+            "pool_threads": 2
+        }
 
 def get_resolution_bitrates():
     """Get bitrate settings based on resolution"""
@@ -94,6 +113,9 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
+    # Get CPU information for optimal threading
+    cpu_info = get_cpu_info()
+    
     # Detect video resolution and get appropriate bitrate
     resolution_category, actual_resolution = detect_resolution(input_path)
     bitrates = get_resolution_bitrates()
@@ -105,21 +127,43 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
     if progress_callback:
         progress_callback(5)  # Initial progress
     
-    # Build command with x265 and resolution-based bitrates
+    # Build command with x265 and maximum CPU utilization
     command = [
         "ffmpeg",
         "-i", input_path,
+        
+        # Hardware acceleration (try to use if available)
+        "-hwaccel", "auto",
+        "-hwaccel_output_format", "auto",
+        
+        # Video encoding settings
         "-c:v", preset_config["codec"],
         "-preset", preset_config["preset"],
-        "-b:v", target_bitrate,  # Use bitrate instead of CRF
-        "-maxrate", target_bitrate,  # Maximum bitrate 
-        "-bufsize", f"{int(target_bitrate.rstrip('k')) * 2}k",  # Buffer size = 2x bitrate
+        "-b:v", target_bitrate,
+        "-maxrate", target_bitrate,
+        "-bufsize", f"{int(target_bitrate.rstrip('k')) * 2}k",
         "-pix_fmt", preset_config["pix_fmt"],
-        "-c:a", "aac",  # Use AAC audio codec for better compatibility
-        "-b:a", "128k",  # Audio bitrate
-        "-movflags", "+faststart",  # Optimize for web streaming
-        "-threads", "0",  # Use all available CPU cores
+        
+        # Audio settings
+        "-c:a", "aac",
+        "-b:a", "128k",
+        
+        # Enhanced multi-threading configuration
+        "-threads", str(cpu_info["optimal_threads"]),
+        "-thread_type", "frame+slice",
+        "-slices", str(cpu_info["cpu_count"]),
+        "-filter_complex_threads", str(cpu_info["cpu_count"]),
+        
+        # Streaming and performance optimizations
+        "-movflags", "+faststart",
+        "-avoid_negative_ts", "make_zero",
+        "-fflags", "+genpts",
     ]
+    
+    # Add x265-specific optimizations (with error handling)
+    if preset_config["codec"] == "libx265":
+        x265_params = f"pools={cpu_info['pool_threads']}:frame-threads={cpu_info['cpu_count']}:wpp:pmode:pme:asm=avx2"
+        command.extend(["-x265-params", x265_params])
     
     # Add extra arguments if any
     command.extend(preset_config["extra_args"])
@@ -128,6 +172,7 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
     command.extend(["-y", output_path])
     
     print(f"Encoding {actual_resolution} video with {target_bitrate} bitrate using {preset_config['codec']} {preset_config['preset']} preset")
+    print(f"CPU Utilization: {cpu_info['cpu_count']} cores, {cpu_info['optimal_threads']} threads, {cpu_info['pool_threads']} pools")
 
     try:
         process = subprocess.Popen(

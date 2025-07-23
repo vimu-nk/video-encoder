@@ -79,7 +79,7 @@ class JobQueue:
         with self.lock:
             return [job for job in self.jobs if job.status in [JobStatus.DOWNLOADING, JobStatus.ENCODING, JobStatus.UPLOADING]]
     
-    def update_job_status(self, job_id: str, status: JobStatus, log_message: str = "", progress: int = None, error: str = None):
+    def update_job_status(self, job_id: str, status: JobStatus, log_message: str = "", progress: Optional[int] = None, error: Optional[str] = None):
         """Update job status and add log message"""
         with self.lock:
             job = next((job for job in self.jobs if job.id == job_id), None)
