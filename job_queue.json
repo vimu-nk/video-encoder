@@ -1,0 +1,44 @@
+[
+  {
+    "id": "job_1753303139_0",
+    "file_path": "test_video_1.mp4",
+    "preset": "fast",
+    "status": "completed",
+    "created_at": "2025-07-24T02:08:59.529451",
+    "started_at": "2025-07-24T02:08:59.545249",
+    "completed_at": "2025-07-24T02:08:59.557483",
+    "progress": 100,
+    "log": "Job created for test_video_1.mp4 with preset fast\n[02:08:59] Started download\n[02:08:59] Started encoding\n[02:08:59] Encoding progress\n[02:08:59] Started upload\n[02:08:59] Job completed\n",
+    "error": null,
+    "input_file": null,
+    "output_file": null
+  },
+  {
+    "id": "job_1753303139_1",
+    "file_path": "folder/test_video_2.mkv",
+    "preset": "medium",
+    "status": "failed",
+    "created_at": "2025-07-24T02:08:59.530843",
+    "started_at": null,
+    "completed_at": "2025-07-24T02:08:59.580220",
+    "progress": 0,
+    "log": "Job created for folder/test_video_2.mkv with preset medium\n[02:08:59] Test failure\n",
+    "error": "Mock encoding error",
+    "input_file": null,
+    "output_file": null
+  },
+  {
+    "id": "job_1753303139_2",
+    "file_path": "another/test_video_3.avi",
+    "preset": "ultrafast",
+    "status": "queued",
+    "created_at": "2025-07-24T02:08:59.533911",
+    "started_at": null,
+    "completed_at": null,
+    "progress": 0,
+    "log": "Job created for another/test_video_3.avi with preset ultrafast\n",
+    "error": null,
+    "input_file": null,
+    "output_file": null
+  }
+]

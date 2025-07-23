@@ -147,7 +147,7 @@
 
 		<br />
 		<a
-			href="/status"
+			href="/logs"
 			style="
 				background: #28a745;
 				color: white;
@@ -155,7 +155,7 @@
 				text-decoration: none;
 				border-radius: 4px;
 			"
-			>Check Job Status</a
+			>📊 View Job Queue & Logs</a
 		>
 
 		<script>
@@ -196,19 +196,58 @@
 			// Handle form submission
 			document
 				.querySelector("form")
-				.addEventListener("submit", function (e) {
+				.addEventListener("submit", async function (e) {
+					e.preventDefault(); // Always prevent default submission
+
 					if (!selectedFilePath) {
-						e.preventDefault();
 						alert("Please select a video file to encode.");
 						return;
 					}
 
-					// Create hidden input with selected file path
-					const hiddenInput = document.createElement("input");
-					hiddenInput.type = "hidden";
-					hiddenInput.name = "file_path";
-					hiddenInput.value = selectedFilePath;
-					this.appendChild(hiddenInput);
+					const submitBtn = document.getElementById("encodeBtn");
+					const originalText = submitBtn.textContent;
+
+					try {
+						// Disable button and show loading
+						submitBtn.disabled = true;
+						submitBtn.textContent = "Adding to Queue...";
+
+						// Get form data
+						const formData = new FormData(this);
+						formData.append("file_path", selectedFilePath);
+
+						// Submit via AJAX
+						const response = await fetch("/encode", {
+							method: "POST",
+							body: formData,
+						});
+
+						const result = await response.json();
+
+						if (result.success) {
+							// Show success message
+							alert(
+								`✅ Job added to queue successfully!\n\nJob ID: ${result.job_id}\nFile: ${result.file_path}\nPreset: ${result.preset}\n\nCheck the logs page to monitor progress.`
+							);
+
+							// Optionally redirect to logs page
+							setTimeout(() => {
+								window.location.href = "/logs";
+							}, 2000);
+						} else {
+							// Show error message
+							alert(
+								`❌ Failed to add job to queue:\n${result.error}`
+							);
+						}
+					} catch (error) {
+						console.error("Error submitting job:", error);
+						alert("❌ Network error occurred. Please try again.");
+					} finally {
+						// Re-enable button
+						submitBtn.disabled = false;
+						submitBtn.textContent = originalText;
+					}
 				});
 
 			// Load root directory on page load

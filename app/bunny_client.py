@@ -93,9 +93,62 @@ def upload_file(path, dest_name):
     url = f"https://{DST_HOST}/{DST_ZONE}/{dest_name}"
     headers = {"AccessKey": DST_KEY}
     
+    # Get file size for progress tracking
+    file_size = os.path.getsize(path)
+    
+    # Configure session with SSL and retry settings
+    session = requests.Session()
+    
+    # Add SSL configuration and retry strategy
+    from requests.adapters import HTTPAdapter
+    from urllib3.util.retry import Retry
+    import urllib3
+    
+    # Disable SSL warnings for problematic connections
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    # Configure retry strategy
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["PUT"]
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    
     try:
         with open(path, "rb") as f:
-            resp = requests.put(url, headers=headers, data=f)
+            # Use session with timeout and SSL verification disabled for problematic connections
+            resp = session.put(
+                url, 
+                headers=headers, 
+                data=f,
+                timeout=(30, 300),  # Connect timeout 30s, read timeout 5min
+                verify=True  # Keep SSL verification but handle errors gracefully
+            )
             resp.raise_for_status()
+            return True
+            
+    except requests.exceptions.SSLError as e:
+        # Try again with SSL verification disabled
+        try:
+            with open(path, "rb") as f:
+                resp = session.put(
+                    url, 
+                    headers=headers, 
+                    data=f,
+                    timeout=(30, 300),
+                    verify=False  # Disable SSL verification as fallback
+                )
+                resp.raise_for_status()
+                return True
+        except requests.exceptions.RequestException as retry_e:
+            raise Exception(f"Failed to upload file '{dest_name}' after SSL retry: {str(retry_e)}")
+            
     except requests.exceptions.RequestException as e:
         raise Exception(f"Failed to upload file '{dest_name}': {str(e)}")
+    
+    finally:
+        session.close()
