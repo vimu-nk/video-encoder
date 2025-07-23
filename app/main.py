@@ -41,16 +41,44 @@ def update_progress(filename, percent):
     job_status[filename]["log"] += f"Progress: {percent}%\n"
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request, path: str = ""):
     try:
-        files = await list_files()
-        return templates.TemplateResponse("dashboard.html", {"request": request, "files": files})
+        files_data = await list_files(path)
+        return templates.TemplateResponse("dashboard.html", {
+            "request": request, 
+            "files_data": files_data,
+            "current_path": path
+        })
     except Exception as e:
-        return templates.TemplateResponse("dashboard.html", {"request": request, "files": [], "error": str(e)})
+        return templates.TemplateResponse("dashboard.html", {
+            "request": request, 
+            "files_data": {"directories": [], "files": [], "current_path": path, "parent_path": ""}, 
+            "error": str(e),
+            "current_path": path
+        })
+
+@app.get("/browse", response_class=HTMLResponse)
+async def browse_directory(request: Request, path: str = ""):
+    """AJAX endpoint for directory navigation"""
+    try:
+        files_data = await list_files(path)
+        return templates.TemplateResponse("file_list.html", {
+            "request": request,
+            "files_data": files_data
+        })
+    except Exception as e:
+        return templates.TemplateResponse("file_list.html", {
+            "request": request,
+            "files_data": {"directories": [], "files": [], "current_path": path, "parent_path": ""},
+            "error": str(e)
+        })
 
 @app.post("/encode")
-async def start_encoding(background_tasks: BackgroundTasks, filename: str = Form(...)):
+async def start_encoding(background_tasks: BackgroundTasks, file_path: str = Form(...)):
     try:
+        # Extract filename from path for display
+        filename = file_path.split('/')[-1]
+        
         # Initialize job status
         job_status[filename] = {"status": "downloading", "log": "Starting download...\n", "percent": 0}
         
@@ -60,9 +88,9 @@ async def start_encoding(background_tasks: BackgroundTasks, filename: str = Form
 
         def encode_job():
             try:
-                # Download file from source storage
+                # Download file from source storage using full path
                 job_status[filename]["log"] += "Downloading from source storage...\n"
-                download_file(filename, input_path)
+                download_file(file_path, input_path)  # Use full path including directories
                 job_status[filename]["log"] += "Download completed.\n"
                 
                 # Start encoding

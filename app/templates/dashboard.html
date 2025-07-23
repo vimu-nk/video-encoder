@@ -14,18 +14,78 @@
 				border: 1px solid red;
 				margin: 10px 0;
 			}
-			.file-list {
-				margin: 20px 0;
+			.breadcrumb {
+				background: #f5f5f5;
+				padding: 10px;
+				margin: 10px 0;
+				border-radius: 4px;
+			}
+			.breadcrumb-item {
+				color: #007cba;
+				text-decoration: none;
+				margin: 0 5px;
+			}
+			.breadcrumb-item:hover {
+				text-decoration: underline;
+			}
+			.file-browser {
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				min-height: 400px;
+				padding: 15px;
+				background: #fafafa;
+			}
+			.directory-item {
+				margin: 8px 0;
+				padding: 8px;
+				background: #e8f4fd;
+				border-radius: 3px;
+			}
+			.directory-link {
+				color: #0066cc;
+				text-decoration: none;
+				font-weight: bold;
+			}
+			.directory-link:hover {
+				text-decoration: underline;
 			}
 			.file-item {
-				margin: 10px 0;
+				margin: 8px 0;
+				padding: 8px;
+				background: white;
+				border: 1px solid #eee;
+				border-radius: 3px;
+			}
+			.file-item:hover {
+				background: #f0f8ff;
+			}
+			.file-size {
+				color: #666;
+				font-size: 0.9em;
+			}
+			.file-date {
+				color: #888;
+				font-size: 0.8em;
+			}
+			.empty-directory {
+				text-align: center;
+				color: #666;
+				padding: 40px;
+			}
+			.loading {
+				text-align: center;
+				color: #666;
+				padding: 20px;
 			}
 			button {
 				background: #007cba;
 				color: white;
-				padding: 10px 20px;
+				padding: 12px 24px;
 				border: none;
 				cursor: pointer;
+				border-radius: 4px;
+				font-size: 16px;
+				margin: 10px 0;
 			}
 			button:hover {
 				background: #005a87;
@@ -34,40 +94,96 @@
 				background: #ccc;
 				cursor: not-allowed;
 			}
+			.form-container {
+				margin: 20px 0;
+			}
 		</style>
 	</head>
 	<body>
 		<h1>Video Encoder Dashboard</h1>
 
-		{% if error %}
-		<div class="error"><strong>Error:</strong> {{ error }}</div>
-		{% endif %} {% if files %}
-		<h2>Available Files on Source Storage</h2>
-		<form method="post" action="/encode">
-			<div class="file-list">
-				{% for file in files %}
-				<div class="file-item">
-					<label>
-						<input
-							type="radio"
-							name="filename"
-							value="{{ file['ObjectName'] }}"
-							required
-						/>
-						{{ file['ObjectName'] }} ({{ (file['Length'] / 1024 /
-						1024) | round(2) }} MB)
-					</label>
-				</div>
-				{% endfor %}
+		<form method="post" action="/encode" class="form-container">
+			<h2>Browse and Select Video Files</h2>
+
+			<div class="file-browser" id="fileBrowser">
+				<div class="loading">Loading files...</div>
 			</div>
-			<br />
-			<button type="submit">Start Encoding</button>
+
+			<button type="submit" id="encodeBtn" disabled>
+				Start Encoding Selected File
+			</button>
 		</form>
-		{% else %}
-		<p>No files available or unable to connect to source storage.</p>
-		{% endif %}
 
 		<br />
-		<a href="/status">Check Job Status</a>
+		<a
+			href="/status"
+			style="
+				background: #28a745;
+				color: white;
+				padding: 10px 20px;
+				text-decoration: none;
+				border-radius: 4px;
+			"
+			>Check Job Status</a
+		>
+
+		<script>
+			let selectedFilePath = null;
+
+			// Load directory contents
+			async function loadDirectory(path = "") {
+				const fileBrowser = document.getElementById("fileBrowser");
+				fileBrowser.innerHTML = '<div class="loading">Loading...</div>';
+
+				try {
+					const response = await fetch(
+						`/browse?path=${encodeURIComponent(path)}`
+					);
+					const html = await response.text();
+					fileBrowser.innerHTML = html;
+
+					// Re-attach event listeners for radio buttons
+					attachFileSelectionListeners();
+				} catch (error) {
+					fileBrowser.innerHTML = `<div class="error">Error loading directory: ${error.message}</div>`;
+				}
+			}
+
+			// Attach event listeners to radio buttons
+			function attachFileSelectionListeners() {
+				const radioButtons = document.querySelectorAll(
+					'input[name="file_path"]'
+				);
+				radioButtons.forEach((radio) => {
+					radio.addEventListener("change", function () {
+						selectedFilePath = this.value;
+						document.getElementById("encodeBtn").disabled = false;
+					});
+				});
+			}
+
+			// Handle form submission
+			document
+				.querySelector("form")
+				.addEventListener("submit", function (e) {
+					if (!selectedFilePath) {
+						e.preventDefault();
+						alert("Please select a video file to encode.");
+						return;
+					}
+
+					// Create hidden input with selected file path
+					const hiddenInput = document.createElement("input");
+					hiddenInput.type = "hidden";
+					hiddenInput.name = "file_path";
+					hiddenInput.value = selectedFilePath;
+					this.appendChild(hiddenInput);
+				});
+
+			// Load root directory on page load
+			document.addEventListener("DOMContentLoaded", function () {
+				loadDirectory("{{ current_path }}");
+			});
+		</script>
 	</body>
 </html>

@@ -1,0 +1,74 @@
+<!-- File list component for AJAX navigation -->
+{% if error %}
+<div class="error"><strong>Error:</strong> {{ error }}</div>
+{% endif %}
+
+<div class="breadcrumb">
+	<a href="#" onclick="loadDirectory('')" class="breadcrumb-item">🏠 Root</a>
+	{% if files_data.current_path %} {% set path_parts =
+	files_data.current_path.rstrip('/').split('/') %} {% set cumulative_path =
+	'' %} {% for part in path_parts %} {% if part %} {% set cumulative_path =
+	cumulative_path + part + '/' %} /
+	<a
+		href="#"
+		onclick="loadDirectory('{{ cumulative_path.rstrip('/') }}')"
+		class="breadcrumb-item"
+		>{{ part }}</a
+	>
+	{% endif %} {% endfor %} {% endif %}
+</div>
+
+<div class="file-list">
+	<!-- Parent directory link -->
+	{% if files_data.parent_path is defined and files_data.current_path %}
+	<div class="directory-item">
+		<a
+			href="#"
+			onclick="loadDirectory('{{ files_data.parent_path }}')"
+			class="directory-link"
+		>
+			📁 .. (Parent Directory)
+		</a>
+	</div>
+	{% endif %}
+
+	<!-- Directories -->
+	{% for directory in files_data.directories %}
+	<div class="directory-item">
+		<a
+			href="#"
+			onclick="loadDirectory('{{ directory.path }}')"
+			class="directory-link"
+		>
+			📁 {{ directory.name }}
+		</a>
+	</div>
+	{% endfor %}
+
+	<!-- Video files -->
+	{% for file in files_data.files %}
+	<div class="file-item">
+		<label>
+			<input
+				type="radio"
+				name="file_path"
+				value="{{ file.path }}"
+				required
+			/>
+			🎬 {{ file.name }}
+			<span class="file-size"
+				>({{ (file.size / 1024 / 1024) | round(2) }} MB)</span
+			>
+			{% if file.last_modified %}
+			<span class="file-date"
+				>- Modified: {{ file.last_modified[:10] }}</span
+			>
+			{% endif %}
+		</label>
+	</div>
+	{% endfor %} {% if not files_data.directories and not files_data.files %}
+	<div class="empty-directory">
+		<p>No video files or directories found in this location.</p>
+	</div>
+	{% endif %}
+</div>
