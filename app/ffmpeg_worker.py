@@ -29,27 +29,60 @@ def get_gpu_info():
                         'max_graphics_clock': int(parts[4]),
                         'max_memory_clock': int(parts[5])
                     })
+            
+            print(f"🎮 GPU Detection Results:")
+            for i, gpu in enumerate(gpu_info):
+                print(f"   GPU {i}: {gpu['name']} ({gpu['memory']}MB, Driver: {gpu['driver']})")
+            
             return gpu_info
+        else:
+            print(f"⚠️ nvidia-smi failed with return code: {result.returncode}")
+            print(f"   stderr: {result.stderr}")
+            return []
+    except subprocess.TimeoutExpired:
+        print("⚠️ nvidia-smi command timed out")
         return []
-    except:
+    except FileNotFoundError:
+        print("⚠️ nvidia-smi not found - no NVIDIA GPU or drivers not installed")
+        return []
+    except Exception as e:
+        print(f"⚠️ Error getting GPU info: {e}")
         return []
 
 def get_nvenc_capabilities():
-    """Check NVENC capabilities for AV1 encoding"""
+    """Check NVENC capabilities using the recommended detection method"""
     try:
-        # Check if ffmpeg supports av1_nvenc
+        # Use the recommended command to detect NVENC encoders
         result = subprocess.run(['ffmpeg', '-hide_banner', '-encoders'], 
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             output = result.stdout
+            # Filter for NVENC encoders specifically
+            nvenc_lines = [line for line in output.split('\n') if 'nvenc' in line.lower()]
+            
             capabilities = {
-                'av1_nvenc': 'av1_nvenc' in output,
-                'hevc_nvenc': 'hevc_nvenc' in output,
-                'h264_nvenc': 'h264_nvenc' in output
+                'av1_nvenc': any('av1_nvenc' in line for line in nvenc_lines),
+                'hevc_nvenc': any('hevc_nvenc' in line for line in nvenc_lines),
+                'h264_nvenc': any('h264_nvenc' in line for line in nvenc_lines)
             }
+            
+            # Debug output to see what encoders are detected
+            print(f"🔍 NVENC Detection Results:")
+            for line in nvenc_lines:
+                if line.strip():
+                    print(f"   Found: {line.strip()}")
+            print(f"   Capabilities: {capabilities}")
+            
             return capabilities
+        else:
+            print(f"⚠️ FFmpeg encoders command failed with return code: {result.returncode}")
+            print(f"   stderr: {result.stderr}")
+            return {'av1_nvenc': False, 'hevc_nvenc': False, 'h264_nvenc': False}
+    except subprocess.TimeoutExpired:
+        print("⚠️ FFmpeg encoders command timed out")
         return {'av1_nvenc': False, 'hevc_nvenc': False, 'h264_nvenc': False}
-    except:
+    except Exception as e:
+        print(f"⚠️ Error detecting NVENC capabilities: {e}")
         return {'av1_nvenc': False, 'hevc_nvenc': False, 'h264_nvenc': False}
 
 def get_cpu_info():
