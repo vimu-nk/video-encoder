@@ -119,6 +119,7 @@ def process_encoding_job(file_path: str, preset: str, filename: str):
     """Process a single encoding job"""
     try:
         input_path = f"./input/{filename}"
+        # Force MKV extension for output
         output_filename = f"{filename.rsplit('.', 1)[0]}_encoded.mkv"
         output_path = f"./output/{output_filename}"
         
@@ -127,50 +128,54 @@ def process_encoding_job(file_path: str, preset: str, filename: str):
         os.makedirs("./output", exist_ok=True)
         
         # Step 1: Download
-        update_job_status("downloading", "Starting download from source storage...")
+        update_job_status("downloading", "📥 Starting download from source storage...")
         download_file(file_path, input_path)
-        update_job_status("downloading", "Download completed successfully", progress=30)
+        update_job_status("downloading", "✅ Download completed successfully", progress=20)
         
-        # Step 2: Encode
-        update_job_status("encoding", f"Starting encoding with preset: {preset}")
+        # Step 2: NVENC Hardware Encode
+        update_job_status("encoding", f"🚀 Starting NVENC hardware encoding with preset: {preset}")
         
         def progress_callback(percent):
-            # Map encoding progress to overall progress (30% to 90%)
-            overall_progress = 30 + int((percent / 100) * 60)
-            update_job_status("encoding", f"Encoding progress: {percent}%", progress=overall_progress)
+            # Map encoding progress to overall progress (20% to 80%)
+            overall_progress = 20 + int((percent / 100) * 60)
+            update_job_status("encoding", f"⚡ NVENC encoding progress: {percent}%", progress=overall_progress)
         
         return_code = run_ffmpeg(input_path, output_path, progress_callback=progress_callback, preset_name=preset)
         
         if return_code != 0:
-            raise Exception(f"FFmpeg encoding failed with return code: {return_code}")
+            raise Exception(f"NVENC encoding failed with return code: {return_code}")
         
-        update_job_status("encoding", "Encoding completed successfully", progress=90)
+        update_job_status("encoding", "✅ Hardware encoding completed successfully", progress=80)
         
-        # Step 3: Upload
-        update_job_status("uploading", "Starting upload to destination storage...")
-        upload_file(output_path, output_filename)
-        update_job_status("uploading", "Upload completed successfully", progress=95)
+        # Step 3: Upload MKV
+        update_job_status("uploading", "📤 Starting upload of encoded MKV file...")
+        upload_file(output_path, f"encoded/{output_filename}")
+        update_job_status("uploading", "✅ Upload completed successfully", progress=95)
         
-        # Step 4: Cleanup
-        if os.path.exists(input_path):
-            os.remove(input_path)
-        if os.path.exists(output_path):
-            os.remove(output_path)
+        # Step 4: Cleanup (original files are already cleaned by run_ffmpeg)
+        update_job_status("cleanup", "🗑️ Cleaning up temporary files...")
+        try:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+                update_job_status("cleanup", f"🗑️ Removed local output file: {output_filename}")
+        except Exception as cleanup_error:
+            update_job_status("cleanup", f"⚠️ Cleanup warning: {cleanup_error}")
         
-        update_job_status("completed", "Job completed successfully. Local files cleaned up.", progress=100)
+        # Job completed
+        update_job_status("completed", "🎉 Job completed successfully! MKV file encoded with NVENC AV1.", progress=100)
         
     except Exception as e:
-        error_msg = f"Job failed: {str(e)}"
+        error_msg = f"❌ Job failed: {str(e)}"
         update_job_status("failed", error_msg, error=str(e))
+        print(f"Encoding job error: {e}")
         
         # Cleanup on failure
         try:
-            if os.path.exists(input_path):
-                os.remove(input_path)
-            if os.path.exists(output_path):
-                os.remove(output_path)
+            for cleanup_file in [input_path, output_path]:
+                if os.path.exists(cleanup_file):
+                    os.remove(cleanup_file)
         except:
-            pass  # Ignore cleanup errors
+            pass
 
 # Simple status endpoints
 @app.get("/job-status")
