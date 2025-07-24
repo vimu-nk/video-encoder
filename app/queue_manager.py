@@ -35,6 +35,7 @@ class EncodingJob:
     error_message: Optional[str] = None
     file_size_before: Optional[int] = None
     file_size_after: Optional[int] = None
+    remote_path: Optional[str] = None  # Store the original remote path for download
     
     def __post_init__(self):
         if self.progress is None:
@@ -227,8 +228,13 @@ class JobQueue:
             # Step 1: Download (if input_path doesn't exist locally)
             if not os.path.exists(input_path):
                 # This means we need to download from Bunny CDN
-                # The job.input_file should contain the remote path
-                remote_path = job.input_file.replace("./input/", "")  # Remove local prefix
+                # Use the stored remote_path or derive it from the filename
+                if job.remote_path:
+                    remote_path = job.remote_path
+                else:
+                    # Fallback: try to derive from input_file path
+                    remote_path = job.input_file.replace("./input/", "")
+                
                 logger.info(f"Downloading {remote_path} to {input_path}")
                 download_file(remote_path, input_path)
             

@@ -289,6 +289,162 @@
 				margin-right: 10px;
 				transform: scale(1.2);
 			}
+
+			/* Mobile Responsive Design */
+			@media (max-width: 768px) {
+				body {
+					padding: 10px;
+				}
+
+				.container {
+					padding: 20px;
+					margin: 0;
+					border-radius: 8px;
+				}
+
+				h1 {
+					font-size: 2em;
+					text-align: center;
+					margin-bottom: 20px;
+				}
+
+				h2 {
+					font-size: 1.3em;
+					margin-bottom: 15px;
+				}
+
+				.hardware-status {
+					padding: 15px;
+					margin: 15px 0;
+					font-size: 0.9em;
+					text-align: center;
+				}
+
+				.form-container {
+					padding: 20px;
+					margin: 20px 0;
+				}
+
+				.file-browser {
+					min-height: 300px;
+					padding: 15px;
+				}
+
+				.directory-item,
+				.file-item {
+					padding: 15px;
+					margin: 8px 0;
+				}
+
+				.directory-link {
+					font-size: 1em;
+				}
+
+				select {
+					width: 100%;
+					max-width: none;
+					font-size: 16px; /* Prevents zoom on iOS */
+					padding: 15px;
+				}
+
+				button {
+					width: 100%;
+					padding: 18px;
+					font-size: 18px;
+					margin: 20px 0;
+				}
+
+				.queue-link {
+					display: block;
+					text-align: center;
+					width: 100%;
+					padding: 18px;
+					font-size: 18px;
+					margin-top: 30px;
+				}
+
+				.codec-info {
+					font-size: 13px;
+					line-height: 1.5;
+					margin-top: 15px;
+				}
+
+				.breadcrumb {
+					padding: 12px;
+					font-size: 0.9em;
+					word-break: break-all;
+				}
+
+				.breadcrumb-item {
+					margin: 0 5px;
+					display: inline-block;
+				}
+
+				.file-size,
+				.file-date {
+					font-size: 0.8em;
+					display: block;
+					margin-top: 5px;
+				}
+
+				.toast {
+					right: 10px;
+					left: 10px;
+					top: 10px;
+					max-width: none;
+					font-size: 14px;
+				}
+
+				/* Better touch targets */
+				input[type="checkbox"] {
+					transform: scale(1.5);
+					margin-right: 15px;
+				}
+
+				label {
+					cursor: pointer;
+					-webkit-tap-highlight-color: rgba(116, 185, 255, 0.2);
+					padding: 5px;
+				}
+			}
+
+			@media (max-width: 480px) {
+				h1 {
+					font-size: 1.8em;
+				}
+
+				.container {
+					padding: 15px;
+				}
+
+				.hardware-status {
+					padding: 12px;
+					font-size: 0.85em;
+				}
+
+				.form-container {
+					padding: 15px;
+				}
+
+				.file-browser {
+					padding: 12px;
+					min-height: 250px;
+				}
+
+				.directory-item,
+				.file-item {
+					padding: 12px;
+				}
+
+				.codec-info {
+					font-size: 12px;
+				}
+
+				.breadcrumb {
+					padding: 10px;
+					font-size: 0.8em;
+				}
+			}
 		</style>
 	</head>
 	<body>
@@ -383,7 +539,7 @@
 					</div>
 
 					<button type="submit" id="encodeBtn" disabled>
-						🚀 Add to Encoding Queue
+						🚀 Select Files to Add to Queue
 					</button>
 				</form>
 			</div>
@@ -392,7 +548,7 @@
 		</div>
 
 		<script>
-			let selectedFilePath = null;
+			let selectedFilePaths = [];
 
 			// Toast notification function
 			function showToast(message, isError = false) {
@@ -435,26 +591,46 @@
 					const html = await response.text();
 					fileBrowser.innerHTML = html;
 
-					// Re-attach event listeners for radio buttons
+					// Re-attach event listeners for checkboxes
 					attachFileSelectionListeners();
 				} catch (error) {
 					fileBrowser.innerHTML = `<div class="error">❌ Error loading directory: ${error.message}</div>`;
 				}
 			}
 
-			// Attach event listeners to radio buttons
+			// Attach event listeners to checkboxes
 			function attachFileSelectionListeners() {
-				const radioButtons = document.querySelectorAll(
+				const checkboxes = document.querySelectorAll(
 					'input[name="file_path"]'
 				);
-				radioButtons.forEach((radio) => {
-					radio.addEventListener("change", function () {
-						selectedFilePath = this.value;
-						const encodeBtn = document.getElementById("encodeBtn");
-						encodeBtn.disabled = false;
-						encodeBtn.textContent = "🚀 Add to Encoding Queue";
+				checkboxes.forEach((checkbox) => {
+					checkbox.addEventListener("change", function () {
+						if (this.checked) {
+							selectedFilePaths.push(this.value);
+						} else {
+							selectedFilePaths = selectedFilePaths.filter(
+								(path) => path !== this.value
+							);
+						}
+						updateEncodeButton();
 					});
 				});
+			}
+
+			// Update encode button based on selection
+			function updateEncodeButton() {
+				const encodeBtn = document.getElementById("encodeBtn");
+				if (selectedFilePaths.length > 0) {
+					encodeBtn.disabled = false;
+					if (selectedFilePaths.length === 1) {
+						encodeBtn.textContent = "🚀 Add to Encoding Queue";
+					} else {
+						encodeBtn.textContent = `🚀 Add ${selectedFilePaths.length} Files to Queue`;
+					}
+				} else {
+					encodeBtn.disabled = true;
+					encodeBtn.textContent = "🚀 Select Files to Add to Queue";
+				}
 			}
 
 			// Handle form submission
@@ -463,9 +639,9 @@
 				.addEventListener("submit", async function (e) {
 					e.preventDefault(); // Always prevent default submission
 
-					if (!selectedFilePath) {
+					if (selectedFilePaths.length === 0) {
 						showToast(
-							"⚠️ Please select a video file to encode.",
+							"⚠️ Please select at least one video file to encode.",
 							true
 						);
 						return;
@@ -477,11 +653,19 @@
 					try {
 						// Disable button and show loading
 						submitBtn.disabled = true;
-						submitBtn.textContent = "⏳ Adding to Queue...";
+						if (selectedFilePaths.length === 1) {
+							submitBtn.textContent = "⏳ Adding to Queue...";
+						} else {
+							submitBtn.textContent = `⏳ Adding ${selectedFilePaths.length} Files...`;
+						}
 
 						// Get form data
 						const formData = new FormData(this);
-						formData.append("file_path", selectedFilePath);
+
+						// Add all selected file paths
+						selectedFilePaths.forEach((filePath) => {
+							formData.append("file_path", filePath);
+						});
 
 						// Submit via AJAX
 						const response = await fetch("/encode", {
@@ -493,26 +677,31 @@
 
 						if (result.success) {
 							// Show success toast
-							showToast(`✅ Job added to queue successfully!<br/>
-							<strong>File:</strong> ${result.filename}<br/>
+							const fileText =
+								selectedFilePaths.length === 1
+									? result.filename
+									: `${selectedFilePaths.length} files`;
+							showToast(`✅ Job(s) added to queue successfully!<br/>
+							<strong>Files:</strong> ${fileText}<br/>
 							<strong>Codec:</strong> ${result.codec}`);
 
 							// Reset form
-							selectedFilePath = null;
+							selectedFilePaths = [];
 							submitBtn.disabled = true;
-							submitBtn.textContent = "🚀 Add to Encoding Queue";
+							submitBtn.textContent =
+								"🚀 Select Files to Add to Queue";
 
 							// Clear file selection
-							const radioButtons = document.querySelectorAll(
+							const checkboxes = document.querySelectorAll(
 								'input[name="file_path"]'
 							);
-							radioButtons.forEach(
-								(radio) => (radio.checked = false)
+							checkboxes.forEach(
+								(checkbox) => (checkbox.checked = false)
 							);
 						} else {
 							// Show error toast
 							showToast(
-								`❌ Failed to add job to queue:<br/>${result.error}`,
+								`❌ Failed to add job(s) to queue:<br/>${result.error}`,
 								true
 							);
 						}
@@ -524,9 +713,7 @@
 						);
 					} finally {
 						// Re-enable button if not successful
-						if (
-							submitBtn.textContent !== "🚀 Add to Encoding Queue"
-						) {
+						if (submitBtn.textContent.includes("Adding")) {
 							submitBtn.disabled = false;
 							submitBtn.textContent = originalText;
 						}

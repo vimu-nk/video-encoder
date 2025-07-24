@@ -124,33 +124,48 @@ async def browse_directory(request: Request, path: str = ""):
         })
 
 @app.post("/encode")
-async def start_encoding(file_path: str = Form(...), 
-                        codec: str = Form("hevc_nvenc")):
+async def start_encoding(request: Request):
     try:
-        # Extract filename from path for display
-        filename = file_path.split('/')[-1]
+        # Get form data
+        form_data = await request.form()
+        file_paths = form_data.getlist("file_path")  # Get list of selected files
+        codec = form_data.get("codec", "hevc_nvenc")
         
-        # Create input/output paths
-        input_path = f"./input/{filename}"
-        output_filename = f"{filename.rsplit('.', 1)[0]}.mp4"
-        output_path = f"./output/{output_filename}"
+        if not file_paths:
+            return JSONResponse({
+                "success": False,
+                "error": "No files selected"
+            }, status_code=400)
         
-        # Add job to queue with remote file path for download
-        job_id = add_encoding_job(input_path, output_path, codec)
+        job_ids = []
+        filenames = []
         
-        # Store the original remote path in a way the queue can use it
-        # We'll modify the queue manager to handle this
-        job = get_job(job_id)
-        if job:
-            # Store the remote path for download
-            job.input_file = input_path  # Local path where file will be downloaded
-            # We could add a remote_path field, but for now we'll use the file_path as is
+        # Process each selected file
+        for file_path in file_paths:
+            # Extract filename from path for display
+            filename = file_path.split('/')[-1]
+            
+            # Create input/output paths
+            input_path = f"./input/{filename}"
+            output_filename = f"{filename.rsplit('.', 1)[0]}.mp4"
+            output_path = f"./output/{output_filename}"
+            
+            # Add job to queue with remote file path for download
+            job_id = add_encoding_job(input_path, output_path, codec)
+            
+            # Store the original remote path for download
+            job = get_job(job_id)
+            if job:
+                job.remote_path = file_path  # Store the original remote path
+            
+            job_ids.append(job_id)
+            filenames.append(filename)
         
         return JSONResponse({
             "success": True,
-            "message": f"Encoding job added to queue for {filename}",
-            "job_id": job_id,
-            "filename": filename,
+            "message": f"Added {len(job_ids)} job(s) to queue",
+            "job_ids": job_ids,
+            "filename": filenames[0] if len(filenames) == 1 else f"{len(filenames)} files",
             "codec": codec,
             "redirect_url": "/logs"
         })
