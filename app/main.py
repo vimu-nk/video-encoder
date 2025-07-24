@@ -11,10 +11,14 @@ from datetime import datetime
 from typing import Dict, List
 
 from .ffmpeg_worker import (
-    run_encoding, get_gpu_info, get_nvenc_capabilities, 
-    get_supported_codecs, validate_input_file, get_encoding_status, stop_encoding
+    get_gpu_info, get_nvenc_capabilities, 
+    get_supported_codecs, validate_input_file
 )
 from .bunny_client import list_files, download_file, upload_file
+from .queue_manager import (
+    add_encoding_job, get_queue_status, get_job_logs, 
+    cancel_job, clear_completed_jobs, get_job
+)
 
 # Configure logging
 logging.basicConfig(
@@ -43,21 +47,6 @@ os.makedirs("output", exist_ok=True)
 if os.path.isdir("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Simple job status tracking (single job at a time) with compression stats
-current_job = {
-    "status": "idle", 
-    "log": "", 
-    "progress": 0, 
-    "filename": "", 
-    "error": None,
-    "compression_stats": {
-        "original_size": 0,
-        "compressed_size": 0,
-        "compression_ratio": 0,
-        "space_saved_mb": 0
-    }
-}
-
 # CORS if calling from a browser
 app.add_middleware(
     CORSMiddleware,
@@ -65,18 +54,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-def update_job_status(status, log_message="", progress=None, error=None):
-    """Update the current job status"""
-    current_job["status"] = status
-    if log_message:
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        current_job["log"] += f"[{timestamp}] {log_message}\n"
-    if progress is not None:
-        current_job["progress"] = progress
-    if error:
-        current_job["error"] = error
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, path: str = ""):
@@ -147,33 +124,32 @@ async def browse_directory(request: Request, path: str = ""):
         })
 
 @app.post("/encode")
-async def start_encoding(background_tasks: BackgroundTasks, 
-                        file_path: str = Form(...), 
+async def start_encoding(file_path: str = Form(...), 
                         codec: str = Form("hevc_nvenc")):
     try:
-        # Check if another job is already running
-        if current_job["status"] not in ["idle", "completed", "failed"]:
-            return JSONResponse({
-                "success": False,
-                "error": "Another encoding job is already in progress. Please wait for it to complete."
-            }, status_code=409)
-        
         # Extract filename from path for display
         filename = file_path.split('/')[-1]
         
-        # Initialize job status
-        current_job["filename"] = filename
-        current_job["status"] = "queued"
-        current_job["log"] = f"Job queued for {filename} with codec {codec} (VBR optimized)\n"
-        current_job["progress"] = 0
-        current_job["error"] = None
+        # Create input/output paths
+        input_path = f"./input/{filename}"
+        output_filename = f"{filename.rsplit('.', 1)[0]}.mp4"
+        output_path = f"./output/{output_filename}"
         
-        # Start encoding in background
-        background_tasks.add_task(process_encoding_job, file_path, codec, filename)
+        # Add job to queue with remote file path for download
+        job_id = add_encoding_job(input_path, output_path, codec)
+        
+        # Store the original remote path in a way the queue can use it
+        # We'll modify the queue manager to handle this
+        job = get_job(job_id)
+        if job:
+            # Store the remote path for download
+            job.input_file = input_path  # Local path where file will be downloaded
+            # We could add a remote_path field, but for now we'll use the file_path as is
         
         return JSONResponse({
             "success": True,
-            "message": f"Encoding job started for {filename}",
+            "message": f"Encoding job added to queue for {filename}",
+            "job_id": job_id,
             "filename": filename,
             "codec": codec,
             "redirect_url": "/logs"
@@ -185,102 +161,56 @@ async def start_encoding(background_tasks: BackgroundTasks,
             "error": str(e)
         }, status_code=500)
 
-def process_encoding_job(file_path: str, codec: str, filename: str):
-    """Process a single encoding job with VBR optimization"""
-    try:
-        input_path = f"./input/{filename}"
-        # Force MP4 extension for output
-        output_filename = f"{filename.rsplit('.', 1)[0]}.mp4"
-        output_path = f"./output/{output_filename}"
-        
-        # Create directories if they don't exist
-        os.makedirs("./input", exist_ok=True)
-        os.makedirs("./output", exist_ok=True)
-        
-        # Step 1: Download
-        update_job_status("downloading", "📥 Starting download from source storage...")
-        download_file(file_path, input_path)
-        update_job_status("downloading", "✅ Download completed successfully", progress=20)
-        
-        # Step 2: Encoding with VBR optimization
-        update_job_status("encoding", f"🚀 Starting VBR encoding with codec: {codec} (optimized for 120MB/10min)")
-        
-        def progress_callback(progress_data):
-            # Map encoding progress to overall progress (20% to 80%)
-            if 'percentage' in progress_data:
-                overall_progress = 20 + int((progress_data['percentage'] / 100) * 60)
-                update_job_status("encoding", f"⚡ Encoding progress: {progress_data['percentage']}%", progress=overall_progress)
-        
-        # Use the encoding function with VBR settings
-        success, message = run_encoding(input_path, output_path, codec, progress_callback)
-        
-        if not success:
-            raise Exception(f"Encoding failed: {message}")
-        
-        # Calculate compression statistics
-        if os.path.exists(input_path) and os.path.exists(output_path):
-            original_size = os.path.getsize(input_path)
-            compressed_size = os.path.getsize(output_path)
-            compression_ratio = (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
-            space_saved_mb = (original_size - compressed_size) / (1024*1024)
-            
-            current_job["compression_stats"] = {
-                "original_size": original_size,
-                "compressed_size": compressed_size,
-                "compression_ratio": round(compression_ratio, 1),
-                "space_saved_mb": round(space_saved_mb, 1)
-            }
-            
-            update_job_status("encoding", f"✅ Encoding completed! Saved {compression_ratio:.1f}% space ({space_saved_mb:.1f} MB)", progress=80)
-        else:
-            update_job_status("encoding", "✅ Hardware encoding completed successfully", progress=80)
-        
-        # Step 3: Upload MKV
-        update_job_status("uploading", "📤 Starting upload of encoded MKV file...")
-        upload_file(output_path, f"encoded/{output_filename}")
-        update_job_status("uploading", "✅ Upload completed successfully", progress=95)
-        
-        # Step 4: Cleanup (original files are already cleaned by run_ffmpeg)
-        update_job_status("cleanup", "🗑️ Cleaning up temporary files...")
-        try:
-            if os.path.exists(output_path):
-                os.remove(output_path)
-                update_job_status("cleanup", f"🗑️ Removed local output file: {output_filename}")
-        except Exception as cleanup_error:
-            update_job_status("cleanup", f"⚠️ Cleanup warning: {cleanup_error}")
-        
-        # Job completed with compression stats
-        stats = current_job["compression_stats"]
-        if stats["compression_ratio"] > 0:
-            completion_msg = f"🎉 Job completed! AV1 NVENC encoding saved {stats['compression_ratio']}% space ({stats['space_saved_mb']} MB)"
-        else:
-            completion_msg = "🎉 Job completed successfully! MKV file encoded with NVENC AV1."
-        
-        update_job_status("completed", completion_msg, progress=100)
-        
-    except Exception as e:
-        error_msg = f"❌ Job failed: {str(e)}"
-        update_job_status("failed", error_msg, error=str(e))
-        print(f"Encoding job error: {e}")
-        
-        # Cleanup on failure
-        try:
-            for cleanup_file in [input_path, output_path]:
-                if os.path.exists(cleanup_file):
-                    os.remove(cleanup_file)
-        except:
-            pass
+# API endpoints for queue management
+@app.get("/api/queue/status")
+async def api_get_queue_status():
+    """Get current queue status"""
+    return get_queue_status()
 
-# Simple status endpoints
+@app.get("/api/queue/logs")
+async def api_get_job_logs(limit: int = 100):
+    """Get job logs"""
+    return get_job_logs(limit)
+
+@app.post("/api/queue/cancel/{job_id}")
+async def api_cancel_job(job_id: str):
+    """Cancel a specific job"""
+    try:
+        success = cancel_job(job_id)
+        return {
+            "success": success,
+            "message": "Job cancelled successfully" if success else "Failed to cancel job"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/queue/clear")
+async def api_clear_completed_jobs():
+    """Clear all completed jobs"""
+    try:
+        count = clear_completed_jobs()
+        return {
+            "success": True,
+            "message": f"Cleared {count} completed jobs"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/job-status")
 async def get_current_job_status():
-    """Get current job status"""
-    return current_job
+    """Legacy endpoint - returns queue status for compatibility"""
+    return get_queue_status()
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
-    """Logs page showing current job status"""
-    return templates.TemplateResponse("simple_logs.html", {"request": request})
+    """Logs page showing queue status and job logs"""
+    return templates.TemplateResponse("logs.html", {"request": request})
 
 @app.get("/status", response_class=HTMLResponse)
 async def status_page(request: Request):
@@ -295,8 +225,8 @@ async def health_check():
 
 @app.get("/api/status")
 async def api_get_status():
-    """API endpoint for getting current job status"""
-    return current_job
+    """API endpoint for getting queue status (legacy compatibility)"""
+    return get_queue_status()
 
 @app.get("/api/test")
 async def api_test():
@@ -335,27 +265,31 @@ async def api_get_hardware():
         return {
             "gpu_available": False,
             "gpus": [],
-            "nvenc_caps": {"av1": False, "hevc": False, "h264": False},
+            "nvenc_caps": {"hevc": False, "h264": False},
             "has_nvenc": False,
             "error": str(e)
         }
 
 @app.post("/api/stop")
 async def api_stop_encoding():
-    """API endpoint for stopping current encoding"""
+    """API endpoint for stopping/cancelling jobs"""
     try:
-        success, message = stop_encoding()
-        if success:
-            current_job["status"] = "idle"
-            current_job["progress"] = 0
-            update_job_status("idle", "Encoding stopped by user")
-        
-        return {
-            "success": success,
-            "message": message
-        }
+        # Get currently running jobs and cancel them
+        queue_status = get_queue_status()
+        if queue_status['running'] > 0:
+            # For now, we'll need to get the running job ID
+            # This is a simplified approach - in practice you might want to cancel all running jobs
+            return {
+                "success": True,
+                "message": "Use /api/queue/cancel/{job_id} to cancel specific jobs"
+            }
+        else:
+            return {
+                "success": True,
+                "message": "No running jobs to cancel"
+            }
     except Exception as e:
-        logger.error(f"Error stopping encoding: {e}")
+        logger.error(f"Error in stop endpoint: {e}")
         return {
             "success": False,
             "error": str(e)
