@@ -93,44 +93,83 @@
 		</style>
 	</head>
 	<body>
-		<h1>Job Status</h1>
-		
+		<h1>Video Encoder - Job Status</h1>
+
+		<div
+			style="
+				background: #e8f4fd;
+				padding: 15px;
+				margin: 20px 0;
+				border-radius: 8px;
+				border-left: 4px solid #2196f3;
+			"
+		>
+			<strong>📊 Current Encoding Configuration:</strong><br />
+			<div style="margin-top: 10px; font-size: 14px">
+				• <strong>Storage Optimization:</strong> Guaranteed 25%+ file
+				size reduction<br />
+				• <strong>Audio:</strong> AAC stereo at 128k (down from EAC3
+				448k)<br />
+				• <strong>Video Quality:</strong> High (CRF 26, 2Mbps) • Medium
+				(CRF 30, 1.2Mbps) • Low (CRF 34, 800k)<br />
+				• <strong>Container:</strong> MP4 format for maximum
+				compatibility
+			</div>
+		</div>
+
 		<div class="controls">
 			<div class="auto-refresh">
-				<input type="checkbox" id="autoRefresh" checked>
+				<input type="checkbox" id="autoRefresh" checked />
 				<label for="autoRefresh">Auto-refresh every 3 seconds</label>
 			</div>
 			<button onclick="refreshStatus()">Refresh Now</button>
-			<div class="refresh-status" id="refreshStatus">Auto-refresh enabled</div>
+			<div class="refresh-status" id="refreshStatus">
+				Auto-refresh enabled
+			</div>
 			<div class="last-updated" id="lastUpdated">Last updated: Never</div>
 		</div>
-		
+
 		<div id="jobContainer">
-			{% if status %}
-				{% for filename, job in status.items() %}
-				<div class="job status-{{ job.status }}" id="job-{{ loop.index }}">
-					<h3>{{ filename }}</h3>
-					<p><strong>Status:</strong> <span class="job-status">{{ job.status|title }}</span></p>
-					
-					{% if job.percent %}
-					<div class="progress">
-						<div class="progress-bar" style="width: {{ job.percent }}%"></div>
-					</div>
-					<p>Progress: <span class="job-progress">{{ job.percent }}</span>%</p>
-					{% endif %}
-					
-					{% if job.log %}
-					<div class="log job-log">{{ job.log }}</div>
-					{% endif %}
+			{% if status %} {% for filename, job in status.items() %}
+			<div class="job status-{{ job.status }}" id="job-{{ loop.index }}">
+				<h3>{{ filename }}</h3>
+				<p>
+					<strong>Status:</strong>
+					<span class="job-status">{{ job.status|title }}</span>
+				</p>
+
+				{% if job.percent %}
+				<div class="progress">
+					<div
+						class="progress-bar"
+						style="width: {{ job.percent }}%"
+					></div>
 				</div>
-				{% endfor %}
-			{% else %}
+				<p>
+					Progress:
+					<span class="job-progress">{{ job.percent }}</span>%
+				</p>
+				{% endif %} {% if job.log %}
+				<div class="log job-log">{{ job.log }}</div>
+				{% endif %}
+			</div>
+			{% endfor %} {% else %}
 			<p>No encoding jobs found.</p>
 			{% endif %}
 		</div>
-		
+
 		<br />
-		<a href="/" style="background: #007cba; color: white; padding: 10px 20px; text-decoration: none; border-radius: 3px;">Back to Dashboard</a>
+		<a
+			href="/"
+			style="
+				background: #007cba;
+				color: white;
+				padding: 10px 20px;
+				text-decoration: none;
+				border-radius: 3px;
+			"
+			>Back to Dashboard</a
+		>
 
 		<script>
 			let autoRefreshInterval = null;
@@ -141,9 +180,12 @@
 				if (autoRefreshInterval) {
 					clearInterval(autoRefreshInterval);
 				}
-				
+
 				autoRefreshInterval = setInterval(async () => {
-					if (document.getElementById('autoRefresh').checked && !isRefreshing) {
+					if (
+						document.getElementById("autoRefresh").checked &&
+						!isRefreshing
+					) {
 						await refreshStatus();
 					}
 				}, 3000); // 3 seconds
@@ -152,25 +194,28 @@
 			// Manual refresh
 			async function refreshStatus() {
 				if (isRefreshing) return;
-				
+
 				isRefreshing = true;
-				const refreshStatusEl = document.getElementById('refreshStatus');
-				refreshStatusEl.textContent = 'Refreshing...';
-				
+				const refreshStatusEl =
+					document.getElementById("refreshStatus");
+				refreshStatusEl.textContent = "Refreshing...";
+
 				try {
-					const response = await fetch('/api/status');
+					const response = await fetch("/api/status");
 					const data = await response.json();
 					updateJobStatus(data);
-					
+
 					// Update last updated time
 					const now = new Date();
-					document.getElementById('lastUpdated').textContent = 
-						`Last updated: ${now.toLocaleTimeString()}`;
-					
-					refreshStatusEl.textContent = 'Auto-refresh enabled';
+					document.getElementById(
+						"lastUpdated"
+					).textContent = `Last updated: ${now.toLocaleTimeString()}`;
+
+					refreshStatusEl.textContent = "Auto-refresh enabled";
 				} catch (error) {
-					console.error('Failed to refresh status:', error);
-					refreshStatusEl.textContent = 'Refresh failed - retrying...';
+					console.error("Failed to refresh status:", error);
+					refreshStatusEl.textContent =
+						"Refresh failed - retrying...";
 				} finally {
 					isRefreshing = false;
 				}
@@ -178,63 +223,77 @@
 
 			// Update job status in the DOM
 			function updateJobStatus(statusData) {
-				const container = document.getElementById('jobContainer');
-				
+				const container = document.getElementById("jobContainer");
+
 				if (Object.keys(statusData).length === 0) {
-					container.innerHTML = '<p>No encoding jobs found.</p>';
+					container.innerHTML = "<p>No encoding jobs found.</p>";
 					return;
 				}
 
-				let html = '';
+				let html = "";
 				let jobIndex = 1;
-				
+
 				for (const [filename, job] of Object.entries(statusData)) {
 					html += `
 						<div class="job status-${job.status}" id="job-${jobIndex}">
 							<h3>${filename}</h3>
-							<p><strong>Status:</strong> <span class="job-status">${job.status.charAt(0).toUpperCase() + job.status.slice(1)}</span></p>
+							<p><strong>Status:</strong> <span class="job-status">${
+								job.status.charAt(0).toUpperCase() +
+								job.status.slice(1)
+							}</span></p>
 							
-							${job.percent ? `
+							${
+								job.percent
+									? `
 							<div class="progress">
 								<div class="progress-bar" style="width: ${job.percent}%"></div>
 							</div>
 							<p>Progress: <span class="job-progress">${job.percent}</span>%</p>
-							` : ''}
+							`
+									: ""
+							}
 							
-							${job.log ? `
+							${
+								job.log
+									? `
 							<div class="log job-log">${job.log}</div>
-							` : ''}
+							`
+									: ""
+							}
 						</div>
 					`;
 					jobIndex++;
 				}
-				
+
 				container.innerHTML = html;
 			}
 
 			// Auto-refresh toggle
-			document.getElementById('autoRefresh').addEventListener('change', function() {
-				const refreshStatusEl = document.getElementById('refreshStatus');
-				if (this.checked) {
-					startAutoRefresh();
-					refreshStatusEl.textContent = 'Auto-refresh enabled';
-				} else {
-					if (autoRefreshInterval) {
-						clearInterval(autoRefreshInterval);
+			document
+				.getElementById("autoRefresh")
+				.addEventListener("change", function () {
+					const refreshStatusEl =
+						document.getElementById("refreshStatus");
+					if (this.checked) {
+						startAutoRefresh();
+						refreshStatusEl.textContent = "Auto-refresh enabled";
+					} else {
+						if (autoRefreshInterval) {
+							clearInterval(autoRefreshInterval);
+						}
+						refreshStatusEl.textContent = "Auto-refresh disabled";
 					}
-					refreshStatusEl.textContent = 'Auto-refresh disabled';
-				}
-			});
+				});
 
 			// Start auto-refresh on page load
-			document.addEventListener('DOMContentLoaded', function() {
+			document.addEventListener("DOMContentLoaded", function () {
 				startAutoRefresh();
 				// Initial refresh
 				refreshStatus();
 			});
 
 			// Clean up interval when page is unloaded
-			window.addEventListener('beforeunload', function() {
+			window.addEventListener("beforeunload", function () {
 				if (autoRefreshInterval) {
 					clearInterval(autoRefreshInterval);
 				}
