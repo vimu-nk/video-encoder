@@ -87,39 +87,46 @@ class FFmpegWorker:
         pixels = width * height
         
         # Target: 120MB for 10 minutes = 12MB/min = 1.6Mbps average
-        # VBR settings optimized by resolution
-        if pixels <= 720 * 480:  # SD (480p and below)
+        # VBR settings optimized by resolution (scaled from 1080p: 1500k avg, 2000k max)
+        if pixels <= 640 * 360:  # 360p and below
             return {
-                'avg_bitrate': '800k',
-                'max_bitrate': '1200k', 
+                'avg_bitrate': '400k',
+                'max_bitrate': '600k', 
+                'crf': 30,
+                'preset': 'medium'
+            }
+        elif pixels <= 720 * 480:  # SD (480p)
+            return {
+                'avg_bitrate': '600k',
+                'max_bitrate': '800k', 
                 'crf': 28,
                 'preset': 'medium'
             }
         elif pixels <= 1280 * 720:  # HD (720p)
             return {
-                'avg_bitrate': '1200k',
-                'max_bitrate': '1800k',
+                'avg_bitrate': '900k',
+                'max_bitrate': '1200k',
                 'crf': 26,
                 'preset': 'medium'
             }
         elif pixels <= 1920 * 1080:  # Full HD (1080p)
             return {
-                'avg_bitrate': '1600k',
-                'max_bitrate': '2400k',
+                'avg_bitrate': '1500k',
+                'max_bitrate': '2000k',
                 'crf': 24,
                 'preset': 'medium'
             }
         elif pixels <= 2560 * 1440:  # QHD (1440p)
             return {
-                'avg_bitrate': '2400k',
-                'max_bitrate': '3600k',
+                'avg_bitrate': '2200k',
+                'max_bitrate': '3000k',
                 'crf': 22,
                 'preset': 'slow'
             }
         else:  # 4K and above
             return {
-                'avg_bitrate': '4000k',
-                'max_bitrate': '6000k',
+                'avg_bitrate': '3500k',
+                'max_bitrate': '4500k',
                 'crf': 20,
                 'preset': 'slow'
             }
