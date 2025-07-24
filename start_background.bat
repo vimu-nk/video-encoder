@@ -106,8 +106,16 @@ if !ERRORLEVEL! EQU 0 (
 REM Start the service in background
 call :print_status "Starting FastAPI application..."
 
-REM Use PowerShell to start the process in background and capture PID
-powershell -Command "& {$process = Start-Process -FilePath 'uvicorn' -ArgumentList 'app.main:app --host 0.0.0.0 --port 8000 --workers 1 --access-log --log-level info' -PassThru -RedirectStandardOutput '%LOG_FILE%' -RedirectStandardError '%ERROR_LOG%' -WindowStyle Hidden; $process.Id | Out-File -FilePath '%PID_FILE%' -Encoding ascii}"
+REM Create a PowerShell script to start the service
+echo Set-Location '%APP_DIR%' > "%LOG_DIR%\start_service.ps1"
+echo $process = Start-Process -FilePath 'python' -ArgumentList 'start_server.py' -PassThru -RedirectStandardOutput '%LOG_FILE%' -RedirectStandardError '%ERROR_LOG%' -WindowStyle Hidden >> "%LOG_DIR%\start_service.ps1"
+echo $process.Id ^| Out-File -FilePath '%PID_FILE%' -Encoding ascii >> "%LOG_DIR%\start_service.ps1"
+
+REM Execute the PowerShell script
+powershell -ExecutionPolicy Bypass -File "%LOG_DIR%\start_service.ps1"
+
+REM Clean up the temporary script
+del "%LOG_DIR%\start_service.ps1" 2>NUL
 
 REM Wait a moment and check if it started successfully
 timeout /t 3 /nobreak >NUL
