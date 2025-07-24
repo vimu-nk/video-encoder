@@ -1,7 +1,24 @@
 #!/bin/bash
 
 # Video Encoder Platform - Background Startup Script
-# This script starts the FastAPI application in the background and manages it
+# This script starts the FastAPI appli    # Change to app directory
+    cd "$APP_DIR"
+    
+    # Check dependencies
+    print_status "Checking dependencies..."
+    if ! python3 -c "import fastapi, uvicorn" 2>/dev/null; then
+        print_error "Missing required Python packages. Installing..."
+        pip3 install -r requirements.txt
+    fi
+    
+    # Verify app module can be imported
+    print_status "Verifying app module..."
+    if ! python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app" 2>/dev/null; then
+        print_error "Cannot import app module. Checking structure..."
+        ls -la app/
+        print_error "Make sure you're running from the correct directory with app/ subdirectory"
+        exit 1
+    fi the background and manages it
 
 set -e
 
@@ -136,13 +153,28 @@ start_service() {
     
     # Start the service in background
     print_status "Starting FastAPI application..."
-    nohup python3 -m uvicorn app.main:app \
-        --host 0.0.0.0 \
-        --port 8000 \
-        --workers 1 \
-        --access-log \
-        --log-level info \
-        > "$LOG_FILE" 2>&1 &
+    print_status "Working directory: $(pwd)"
+    print_status "Python path: $PYTHONPATH"
+    
+    # Set PYTHONPATH to include current directory so 'app' module can be found
+    export PYTHONPATH="$APP_DIR:$PYTHONPATH"
+    
+    # Create a startup script to ensure proper environment
+    cat > "$LOG_DIR/start_uvicorn.sh" << EOF
+#!/bin/bash
+cd "$APP_DIR"
+export PYTHONPATH="$APP_DIR:\$PYTHONPATH"
+exec python3 -m uvicorn app.main:app \\
+    --host 0.0.0.0 \\
+    --port 8000 \\
+    --workers 1 \\
+    --access-log \\
+    --log-level info
+EOF
+    
+    chmod +x "$LOG_DIR/start_uvicorn.sh"
+    
+    nohup "$LOG_DIR/start_uvicorn.sh" > "$LOG_FILE" 2>&1 &
     
     PID=$!
     echo "$PID" > "$PID_FILE"
