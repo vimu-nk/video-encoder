@@ -2,228 +2,431 @@
 <html>
 	<head>
 		<title>Video Encoder Dashboard</title>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
 			body {
-				font-family: Arial, sans-serif;
-				margin: 40px;
-			}
-			.error {
-				color: red;
-				background: #fee;
-				padding: 10px;
-				border: 1px solid red;
-				margin: 10px 0;
-			}
-			.breadcrumb {
-				background: #f5f5f5;
-				padding: 10px;
-				margin: 10px 0;
-				border-radius: 4px;
-			}
-			.breadcrumb-item {
-				color: #007cba;
-				text-decoration: none;
-				margin: 0 5px;
-			}
-			.breadcrumb-item:hover {
-				text-decoration: underline;
-			}
-			.file-browser {
-				border: 1px solid #ddd;
-				border-radius: 4px;
-				min-height: 400px;
-				padding: 15px;
-				background: #fafafa;
-			}
-			.directory-item {
-				margin: 8px 0;
-				padding: 8px;
-				background: #e8f4fd;
-				border-radius: 3px;
-			}
-			.directory-link {
-				color: #0066cc;
-				text-decoration: none;
-				font-weight: bold;
-			}
-			.directory-link:hover {
-				text-decoration: underline;
-			}
-			.file-item {
-				margin: 8px 0;
-				padding: 8px;
-				background: white;
-				border: 1px solid #eee;
-				border-radius: 3px;
-			}
-			.file-item:hover {
-				background: #f0f8ff;
-			}
-			.file-size {
-				color: #666;
-				font-size: 0.9em;
-			}
-			.file-date {
-				color: #888;
-				font-size: 0.8em;
-			}
-			.empty-directory {
-				text-align: center;
-				color: #666;
-				padding: 40px;
-			}
-			.loading {
-				text-align: center;
-				color: #666;
+				font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+				background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+				color: #e1e5e9;
+				min-height: 100vh;
 				padding: 20px;
 			}
+
+			.container {
+				max-width: 1200px;
+				margin: 0 auto;
+				background: #1a1d29;
+				border-radius: 12px;
+				padding: 30px;
+				box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+			}
+
+			h1 {
+				color: #4fc3f7;
+				margin-bottom: 30px;
+				text-align: center;
+				font-size: 2.5em;
+			}
+
+			h2 {
+				color: #81c784;
+				margin-bottom: 20px;
+				font-size: 1.5em;
+			}
+
+			.error {
+				color: #ff6b6b;
+				background: rgba(255, 107, 107, 0.1);
+				padding: 15px;
+				border: 1px solid #ff6b6b;
+				border-radius: 8px;
+				margin: 15px 0;
+			}
+
+			.breadcrumb {
+				background: #2c3e50;
+				padding: 15px;
+				margin: 15px 0;
+				border-radius: 8px;
+				border: 1px solid #34495e;
+			}
+
+			.breadcrumb-item {
+				color: #4fc3f7;
+				text-decoration: none;
+				margin: 0 8px;
+				transition: color 0.3s ease;
+			}
+
+			.breadcrumb-item:hover {
+				color: #81c784;
+				text-decoration: underline;
+			}
+
+			.file-browser {
+				border: 1px solid #34495e;
+				border-radius: 8px;
+				min-height: 400px;
+				padding: 20px;
+				background: #2c3e50;
+				margin: 20px 0;
+			}
+
+			.directory-item {
+				margin: 10px 0;
+				padding: 12px;
+				background: rgba(116, 185, 255, 0.1);
+				border-radius: 8px;
+				border: 1px solid rgba(116, 185, 255, 0.2);
+				transition: all 0.3s ease;
+			}
+
+			.directory-item:hover {
+				background: rgba(116, 185, 255, 0.2);
+				transform: translateY(-2px);
+			}
+
+			.directory-link {
+				color: #74b9ff;
+				text-decoration: none;
+				font-weight: bold;
+				font-size: 1.1em;
+			}
+
+			.directory-link:hover {
+				color: #81c784;
+			}
+
+			.file-item {
+				margin: 10px 0;
+				padding: 12px;
+				background: #34495e;
+				border: 1px solid #4a5f7a;
+				border-radius: 8px;
+				transition: all 0.3s ease;
+			}
+
+			.file-item:hover {
+				background: #3c566e;
+				transform: translateY(-2px);
+			}
+
+			.file-size {
+				color: #95a5a6;
+				font-size: 0.9em;
+			}
+
+			.file-date {
+				color: #7f8c8d;
+				font-size: 0.8em;
+			}
+
+			.empty-directory {
+				text-align: center;
+				color: #95a5a6;
+				padding: 60px;
+				font-size: 1.2em;
+			}
+
+			.loading {
+				text-align: center;
+				color: #74b9ff;
+				padding: 40px;
+				font-size: 1.1em;
+			}
+
 			button {
-				background: #007cba;
+				background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
 				color: white;
-				padding: 12px 24px;
+				padding: 15px 30px;
 				border: none;
 				cursor: pointer;
-				border-radius: 4px;
+				border-radius: 8px;
 				font-size: 16px;
-				margin: 10px 0;
+				margin: 15px 0;
+				transition: all 0.3s ease;
+				font-weight: 600;
 			}
+
 			button:hover {
-				background: #005a87;
+				background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%);
+				transform: translateY(-2px);
+				box-shadow: 0 5px 15px rgba(116, 185, 255, 0.4);
 			}
+
 			button:disabled {
-				background: #ccc;
+				background: #636e72;
 				cursor: not-allowed;
+				transform: none;
+				box-shadow: none;
 			}
+
 			.form-container {
+				margin: 30px 0;
+				background: #2c3e50;
+				padding: 25px;
+				border-radius: 12px;
+				border: 1px solid #34495e;
+			}
+
+			select {
+				background: #34495e;
+				color: #e1e5e9;
+				border: 1px solid #4a5f7a;
+				padding: 12px;
+				border-radius: 8px;
+				width: 100%;
+				max-width: 300px;
+				font-size: 16px;
+				margin-bottom: 15px;
+			}
+
+			select:focus {
+				outline: none;
+				border-color: #74b9ff;
+				box-shadow: 0 0 0 2px rgba(116, 185, 255, 0.2);
+			}
+
+			label {
+				display: block;
+				margin-bottom: 8px;
+				font-weight: bold;
+				color: #81c784;
+			}
+
+			.hardware-status {
+				padding: 20px;
 				margin: 20px 0;
+				border-radius: 12px;
+				border: 1px solid;
+			}
+
+			.hardware-enabled {
+				background: rgba(129, 199, 132, 0.1);
+				border-color: #81c784;
+				color: #81c784;
+			}
+
+			.hardware-disabled {
+				background: rgba(255, 193, 7, 0.1);
+				border-color: #ffc107;
+				color: #ffc107;
+			}
+
+			.codec-info {
+				font-size: 14px;
+				color: #95a5a6;
+				margin-top: 10px;
+				line-height: 1.6;
+			}
+
+			.queue-link {
+				display: inline-block;
+				background: linear-gradient(135deg, #81c784 0%, #4caf50 100%);
+				color: white;
+				padding: 15px 25px;
+				text-decoration: none;
+				border-radius: 8px;
+				margin-top: 20px;
+				transition: all 0.3s ease;
+				font-weight: 600;
+			}
+
+			.queue-link:hover {
+				background: linear-gradient(135deg, #4caf50 0%, #81c784 100%);
+				transform: translateY(-2px);
+				box-shadow: 0 5px 15px rgba(129, 199, 132, 0.4);
+			}
+
+			/* Toast Notification Styles */
+			.toast {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				background: linear-gradient(135deg, #81c784 0%, #4caf50 100%);
+				color: white;
+				padding: 15px 25px;
+				border-radius: 8px;
+				box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+				z-index: 1000;
+				transform: translateX(400px);
+				transition: transform 0.3s ease;
+				max-width: 350px;
+				font-weight: 500;
+			}
+
+			.toast.show {
+				transform: translateX(0);
+			}
+
+			.toast.error {
+				background: linear-gradient(135deg, #ff6b6b 0%, #e74c3c 100%);
+			}
+
+			.toast .close-btn {
+				background: none;
+				border: none;
+				color: white;
+				font-size: 18px;
+				font-weight: bold;
+				float: right;
+				cursor: pointer;
+				padding: 0;
+				margin: 0 0 0 15px;
+				line-height: 1;
+			}
+
+			/* Radio button styling */
+			input[type="radio"] {
+				accent-color: #74b9ff;
+				margin-right: 10px;
+				transform: scale(1.2);
 			}
 		</style>
 	</head>
 	<body>
-		<h1>Video Encoder Dashboard</h1>
+		<div class="container">
+			<h1>🎬 Video Encoder Dashboard</h1>
 
-		<!-- Hardware Status -->
-		<div
-			style="background: {% if has_nvenc %}#e8f5e8{% else %}#fff3cd{% endif %}; padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid {% if has_nvenc %}#d4edda{% else %}#ffeaa7{% endif %};"
-		>
-			{% if has_nvenc %}
-			<strong>🚀 Hardware Acceleration: ENABLED</strong>
-			{% if gpu_info.available and gpu_info.gpus %}
-			<br />GPU: {{ gpu_info.gpus[0].name }} ({{
-			gpu_info.gpus[0].memory_total }}) {% endif %} <br />Codecs
-			Available: {% if nvenc_caps.av1 %}AV1 •{% endif %} {% if
-			nvenc_caps.hevc %}HEVC •{% endif %} {% if nvenc_caps.h264 %}H.264{%
-			endif %} {% else %}
-			<strong>⚠️ Hardware Acceleration: DISABLED</strong>
-			<br />Using CPU encoding fallback (x265) <br />Consider installing
-			NVENC-capable GPU for faster encoding {% endif %}
-		</div>
-
-		<form method="post" action="/encode" class="form-container">
-			<h2>Browse and Select Video Files</h2>
-
-			<div class="file-browser" id="fileBrowser">
-				<div class="loading">Loading files...</div>
+			<!-- Hardware Status -->
+			<div
+				class="hardware-status {% if has_nvenc %}hardware-enabled{% else %}hardware-disabled{% endif %}"
+			>
+				{% if has_nvenc %}
+				<strong>🚀 Hardware Acceleration: ENABLED</strong>
+				{% if gpu_info.available and gpu_info.gpus %}
+				<br />GPU: {{ gpu_info.gpus[0].name }} ({{
+				gpu_info.gpus[0].memory_total }}) {% endif %} <br />Codecs
+				Available: {% if nvenc_caps.av1 %}AV1 •{% endif %} {% if
+				nvenc_caps.hevc %}HEVC •{% endif %} {% if nvenc_caps.h264
+				%}H.264{% endif %} {% else %}
+				<strong>⚠️ Hardware Acceleration: DISABLED</strong>
+				<br />Using CPU encoding fallback (x265) <br />Consider
+				installing NVENC-capable GPU for faster encoding {% endif %}
 			</div>
 
-			<div style="margin: 15px 0">
-				<label
-					for="codec"
-					style="
-						display: block;
-						margin-bottom: 5px;
-						font-weight: bold;
-					"
-					>Video Codec:</label
-				>
-				<select
-					name="codec"
-					id="codec"
-					style="padding: 5px; width: 250px; margin-bottom: 10px"
-				>
-					{% if has_nvenc %} {% if nvenc_caps.hevc %}
-					<option value="hevc_nvenc" selected>
-						HEVC (NVENC) - Best Quality
-					</option>
-					{% endif %} {% if nvenc_caps.h264 %}
-					<option
-						value="h264_nvenc"
-						{%
-						if
-						not
-						nvenc_caps.hevc
-						%}selected{%
-						endif
-						%}
-					>
-						H.264 (NVENC) - Universal
-					</option>
-					{% endif %} {% endif %}
-					<option
-						value="x265"
-						{%
-						if
-						not
-						has_nvenc
-						%}selected{%
-						endif
-						%}
-					>
-						HEVC (x265 CPU) - Fallback
-					</option>
-				</select>
+			<div class="form-container">
+				<h2>🎥 Browse and Select Video Files</h2>
 
-				<div style="font-size: 12px; color: #666; margin-top: 3px">
-					{% if has_nvenc %} {% if nvenc_caps.hevc %} 🚀 Using NVENC
-					HEVC hardware acceleration {% if gpu_info.available and
-					gpu_info.gpus %} ({{ gpu_info.gpus[0].name }}) {% endif %}
-					<br />
-					Efficient HEVC VBR encoding with automatic optimization {%
-					else %} 🚀 Using NVENC H.264 hardware acceleration {% if
-					gpu_info.available and gpu_info.gpus %} ({{
-					gpu_info.gpus[0].name }}) {% endif %}
-					<br />
-					Fast H.264 VBR encoding with automatic optimization {% endif
-					%} {% else %} ⚠️ Using CPU x265 encoding (no NVENC
-					detected)<br />
-					Efficient x265 VBR with automatic optimization {% endif %}
-					<br />
-					• MP4 container with AAC stereo audio at 128k<br />
-					• VBR encoding automatically optimized by resolution<br />
-					• Target: ~120MB for 10-minute videos with adaptive
-					bitrates<br />
-					• Supported resolutions: 360p, 480p, 720p, 1080p, 1440p,
-					4K+<br />
-					• Bitrates: 360p (300k-450k) • 480p (450k-650k) • 720p
-					(700k-1M) • 1080p (1M-1.5M)
+				<div class="file-browser" id="fileBrowser">
+					<div class="loading">Loading files...</div>
 				</div>
+
+				<form method="post" action="/encode" id="encodeForm">
+					<div style="margin: 20px 0">
+						<label for="codec">Video Codec:</label>
+						<select name="codec" id="codec">
+							{% if has_nvenc %} {% if nvenc_caps.hevc %}
+							<option value="hevc_nvenc" selected>
+								HEVC (NVENC) - Best Quality
+							</option>
+							{% endif %} {% if nvenc_caps.h264 %}
+							<option
+								value="h264_nvenc"
+								{%
+								if
+								not
+								nvenc_caps.hevc
+								%}selected{%
+								endif
+								%}
+							>
+								H.264 (NVENC) - Universal
+							</option>
+							{% endif %} {% endif %}
+							<option
+								value="x265"
+								{%
+								if
+								not
+								has_nvenc
+								%}selected{%
+								endif
+								%}
+							>
+								HEVC (x265 CPU) - Fallback
+							</option>
+						</select>
+
+						<div class="codec-info">
+							{% if has_nvenc %} {% if nvenc_caps.hevc %} 🚀 Using
+							NVENC HEVC hardware acceleration {% if
+							gpu_info.available and gpu_info.gpus %} ({{
+							gpu_info.gpus[0].name }}){% endif %}
+							<br />Efficient HEVC VBR encoding with automatic
+							optimization {% else %} 🚀 Using NVENC H.264
+							hardware acceleration {% if gpu_info.available and
+							gpu_info.gpus %} ({{ gpu_info.gpus[0].name }}){%
+							endif %} <br />Fast H.264 VBR encoding with
+							automatic optimization {% endif %} {% else %} ⚠️
+							Using CPU x265 encoding (no NVENC detected)<br />
+							Efficient x265 VBR with automatic optimization {%
+							endif %}
+							<br />
+							• MP4 container with AAC stereo audio at 128k<br />
+							• VBR encoding automatically optimized by
+							resolution<br />
+							• Target: ~120MB for 10-minute videos with adaptive
+							bitrates<br />
+							• Supported resolutions: 360p, 480p, 720p, 1080p,
+							1440p, 4K+<br />
+							• Bitrates: 360p (300k-450k) • 480p (450k-650k) •
+							720p (700k-1M) • 1080p (1M-1.5M)
+						</div>
+					</div>
+
+					<button type="submit" id="encodeBtn" disabled>
+						🚀 Add to Encoding Queue
+					</button>
+				</form>
 			</div>
 
-			<button type="submit" id="encodeBtn" disabled>
-				Start Encoding Selected File
-			</button>
-		</form>
-
-		<br />
-		<a
-			href="/logs"
-			style="
-				background: #28a745;
-				color: white;
-				padding: 10px 20px;
-				text-decoration: none;
-				border-radius: 4px;
-			"
-			>📊 View Job Queue & Logs</a
-		>
+			<a href="/logs" class="queue-link">📊 View Job Queue & Logs</a>
+		</div>
 
 		<script>
 			let selectedFilePath = null;
 
+			// Toast notification function
+			function showToast(message, isError = false) {
+				// Remove existing toasts
+				const existingToasts = document.querySelectorAll(".toast");
+				existingToasts.forEach((toast) => toast.remove());
+
+				// Create new toast
+				const toast = document.createElement("div");
+				toast.className = `toast ${isError ? "error" : ""}`;
+				toast.innerHTML = `
+					${message}
+					<button class="close-btn" onclick="this.parentElement.remove()">&times;</button>
+				`;
+
+				document.body.appendChild(toast);
+
+				// Show toast
+				setTimeout(() => toast.classList.add("show"), 100);
+
+				// Auto-hide after 5 seconds
+				setTimeout(() => {
+					if (toast.parentElement) {
+						toast.classList.remove("show");
+						setTimeout(() => toast.remove(), 300);
+					}
+				}, 5000);
+			}
+
 			// Load directory contents
 			async function loadDirectory(path = "") {
 				const fileBrowser = document.getElementById("fileBrowser");
-				fileBrowser.innerHTML = '<div class="loading">Loading...</div>';
+				fileBrowser.innerHTML =
+					'<div class="loading">🔄 Loading...</div>';
 
 				try {
 					const response = await fetch(
@@ -235,7 +438,7 @@
 					// Re-attach event listeners for radio buttons
 					attachFileSelectionListeners();
 				} catch (error) {
-					fileBrowser.innerHTML = `<div class="error">Error loading directory: ${error.message}</div>`;
+					fileBrowser.innerHTML = `<div class="error">❌ Error loading directory: ${error.message}</div>`;
 				}
 			}
 
@@ -247,19 +450,24 @@
 				radioButtons.forEach((radio) => {
 					radio.addEventListener("change", function () {
 						selectedFilePath = this.value;
-						document.getElementById("encodeBtn").disabled = false;
+						const encodeBtn = document.getElementById("encodeBtn");
+						encodeBtn.disabled = false;
+						encodeBtn.textContent = "🚀 Add to Encoding Queue";
 					});
 				});
 			}
 
 			// Handle form submission
 			document
-				.querySelector("form")
+				.getElementById("encodeForm")
 				.addEventListener("submit", async function (e) {
 					e.preventDefault(); // Always prevent default submission
 
 					if (!selectedFilePath) {
-						alert("Please select a video file to encode.");
+						showToast(
+							"⚠️ Please select a video file to encode.",
+							true
+						);
 						return;
 					}
 
@@ -269,7 +477,7 @@
 					try {
 						// Disable button and show loading
 						submitBtn.disabled = true;
-						submitBtn.textContent = "Adding to Queue...";
+						submitBtn.textContent = "⏳ Adding to Queue...";
 
 						// Get form data
 						const formData = new FormData(this);
@@ -284,28 +492,44 @@
 						const result = await response.json();
 
 						if (result.success) {
-							// Show success message
-							alert(
-								`✅ Encoding job started!\n\nFile: ${result.filename}\nPreset: ${result.preset}\n\nRedirecting to status page to monitor progress.`
-							);
+							// Show success toast
+							showToast(`✅ Job added to queue successfully!<br/>
+							<strong>File:</strong> ${result.filename}<br/>
+							<strong>Codec:</strong> ${result.preset}`);
 
-							// Redirect to logs page
-							setTimeout(() => {
-								window.location.href = "/logs";
-							}, 1500);
+							// Reset form
+							selectedFilePath = null;
+							submitBtn.disabled = true;
+							submitBtn.textContent = "🚀 Add to Encoding Queue";
+
+							// Clear file selection
+							const radioButtons = document.querySelectorAll(
+								'input[name="file_path"]'
+							);
+							radioButtons.forEach(
+								(radio) => (radio.checked = false)
+							);
 						} else {
-							// Show error message
-							alert(
-								`❌ Failed to start encoding job:\n${result.error}`
+							// Show error toast
+							showToast(
+								`❌ Failed to add job to queue:<br/>${result.error}`,
+								true
 							);
 						}
 					} catch (error) {
 						console.error("Error submitting job:", error);
-						alert("❌ Network error occurred. Please try again.");
+						showToast(
+							"❌ Network error occurred. Please try again.",
+							true
+						);
 					} finally {
-						// Re-enable button
-						submitBtn.disabled = false;
-						submitBtn.textContent = originalText;
+						// Re-enable button if not successful
+						if (
+							submitBtn.textContent !== "🚀 Add to Encoding Queue"
+						) {
+							submitBtn.disabled = false;
+							submitBtn.textContent = originalText;
+						}
 					}
 				});
 
