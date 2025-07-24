@@ -170,7 +170,14 @@ EOF
         print_success "Video Encoder started successfully (PID: $PID)"
         print_status "Application logs: $LOG_FILE"
         print_status "Service available at: http://localhost:8000"
-        print_status "External access: http://YOUR_DROPLET_IP:8000"
+        
+        # Get actual droplet IP automatically
+        DROPLET_IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || echo "Unable to detect")
+        if [ "$DROPLET_IP" != "Unable to detect" ]; then
+            print_status "External access: http://$DROPLET_IP:8000"
+        else
+            print_status "External access: http://YOUR_DROPLET_IP:8000"
+        fi
         
         # Wait for service to be ready
         print_status "Waiting for service to be ready..."
@@ -270,7 +277,14 @@ show_info() {
     echo "  Log Directory: $LOG_DIR"
     echo "  PID File: $PID_FILE"
     echo "  Local URL: http://localhost:8000"
-    echo "  External URL: http://YOUR_DROPLET_IP:8000"
+    
+    # Get actual droplet IP automatically
+    DROPLET_IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || echo "Unable to detect")
+    if [ "$DROPLET_IP" != "Unable to detect" ]; then
+        echo "  External URL: http://$DROPLET_IP:8000"
+    else
+        echo "  External URL: http://YOUR_DROPLET_IP:8000"
+    fi
     echo
     
     print_status "File Status:"
