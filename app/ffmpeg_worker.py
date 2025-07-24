@@ -41,7 +41,6 @@ class FFmpegWorker:
     def get_nvenc_capabilities(self) -> Dict[str, bool]:
         """Check which NVENC encoders are available"""
         capabilities = {
-            'av1': False,
             'hevc': False, 
             'h264': False
         }
@@ -54,9 +53,7 @@ class FFmpegWorker:
             if result.returncode == 0:
                 output = result.stdout.lower()
                 
-                # Check for specific NVENC encoders
-                if 'av1_nvenc' in output:
-                    capabilities['av1'] = True
+                # Check for specific NVENC encoders (AV1 removed)
                 if 'hevc_nvenc' in output:
                     capabilities['hevc'] = True
                 if 'h264_nvenc' in output:
@@ -67,47 +64,114 @@ class FFmpegWorker:
             
         return capabilities
 
-    def get_ffmpeg_preset(self, codec: str, quality: str, has_nvenc: bool) -> Dict[str, Any]:
-        """Get FFmpeg encoding preset based on codec, quality and hardware availability"""
+    def get_video_resolution(self, input_file: str) -> Tuple[int, int]:
+        """Get video resolution (width, height)"""
+        try:
+            cmd = ['ffprobe', '-v', 'quiet', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', input_file]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                parts = result.stdout.strip().split(',')
+                if len(parts) >= 2:
+                    width = int(parts[0])
+                    height = int(parts[1])
+                    return width, height
+        except Exception as e:
+            logger.error(f"Error getting video resolution: {e}")
+        
+        return 1920, 1080  # Default to 1080p if detection fails
+
+    def get_optimized_settings(self, width: int, height: int) -> Dict[str, Any]:
+        """Get optimized VBR settings based on resolution for 120MB/10min target"""
+        # Calculate total pixels
+        pixels = width * height
+        
+        # Target: 120MB for 10 minutes = 12MB/min = 1.6Mbps average
+        # VBR settings optimized by resolution
+        if pixels <= 720 * 480:  # SD (480p and below)
+            return {
+                'avg_bitrate': '800k',
+                'max_bitrate': '1200k', 
+                'crf': 28,
+                'preset': 'medium'
+            }
+        elif pixels <= 1280 * 720:  # HD (720p)
+            return {
+                'avg_bitrate': '1200k',
+                'max_bitrate': '1800k',
+                'crf': 26,
+                'preset': 'medium'
+            }
+        elif pixels <= 1920 * 1080:  # Full HD (1080p)
+            return {
+                'avg_bitrate': '1600k',
+                'max_bitrate': '2400k',
+                'crf': 24,
+                'preset': 'medium'
+            }
+        elif pixels <= 2560 * 1440:  # QHD (1440p)
+            return {
+                'avg_bitrate': '2400k',
+                'max_bitrate': '3600k',
+                'crf': 22,
+                'preset': 'slow'
+            }
+        else:  # 4K and above
+            return {
+                'avg_bitrate': '4000k',
+                'max_bitrate': '6000k',
+                'crf': 20,
+                'preset': 'slow'
+            }
+
+    def get_ffmpeg_preset(self, codec: str, input_file: str, has_nvenc: bool) -> Dict[str, Any]:
+        """Get FFmpeg encoding preset based on codec and video resolution (VBR optimized for 120MB/10min)"""
         
         # Base audio settings - AAC stereo
         audio_settings = ['-c:a', 'aac', '-b:a', '128k', '-ac', '2']
         
-        # Quality mapping for different codecs - optimized for storage efficiency (25%+ savings)
-        quality_map = {
-            'high': {'crf': 26, 'bitrate': '2000k'},
-            'medium': {'crf': 30, 'bitrate': '1200k'}, 
-            'low': {'crf': 34, 'bitrate': '800k'}
-        }
+        # Get video resolution for optimization
+        width, height = self.get_video_resolution(input_file)
+        settings = self.get_optimized_settings(width, height)
         
-        q_settings = quality_map.get(quality, quality_map['medium'])
-        
-        if codec == 'av1_nvenc' and has_nvenc:
-            return {
-                'video_codec': ['-c:v', 'av1_nvenc'],
-                'quality': ['-cq', str(q_settings['crf']), '-preset', 'p4'],
-                'audio': audio_settings,
-                'output_format': 'mp4'
-            }
-        elif codec == 'hevc_nvenc' and has_nvenc:
+        # Remove AV1, focus on HEVC and H.264 with VBR
+        if codec == 'hevc_nvenc' and has_nvenc:
             return {
                 'video_codec': ['-c:v', 'hevc_nvenc'],
-                'quality': ['-cq', str(q_settings['crf']), '-preset', 'medium'],
+                'quality': [
+                    '-b:v', settings['avg_bitrate'],
+                    '-maxrate', settings['max_bitrate'], 
+                    '-bufsize', str(int(settings['max_bitrate'].replace('k', '')) * 2) + 'k',
+                    '-cq', str(settings['crf']),
+                    '-preset', settings['preset']
+                ],
                 'audio': audio_settings,
                 'output_format': 'mp4'
             }
         elif codec == 'h264_nvenc' and has_nvenc:
             return {
                 'video_codec': ['-c:v', 'h264_nvenc'],
-                'quality': ['-cq', str(q_settings['crf']), '-preset', 'medium'],
+                'quality': [
+                    '-b:v', settings['avg_bitrate'],
+                    '-maxrate', settings['max_bitrate'],
+                    '-bufsize', str(int(settings['max_bitrate'].replace('k', '')) * 2) + 'k',
+                    '-cq', str(settings['crf']),
+                    '-preset', settings['preset']
+                ],
                 'audio': audio_settings,
                 'output_format': 'mp4'
             }
         else:
-            # Fallback to CPU encoding with x265
+            # Fallback to CPU encoding with x265 VBR
             return {
                 'video_codec': ['-c:v', 'libx265'],
-                'quality': ['-crf', str(q_settings['crf']), '-preset', 'medium'],
+                'quality': [
+                    '-b:v', settings['avg_bitrate'],
+                    '-maxrate', settings['max_bitrate'],
+                    '-bufsize', str(int(settings['max_bitrate'].replace('k', '')) * 2) + 'k',
+                    '-crf', str(settings['crf']),
+                    '-preset', settings['preset']
+                ],
                 'audio': audio_settings,
                 'output_format': 'mp4'
             }
@@ -184,17 +248,17 @@ class FFmpegWorker:
             return min(percentage, 100.0)
         return None
 
-    def run_ffmpeg(self, input_file: str, output_file: str, codec: str, quality: str, 
+    def run_ffmpeg(self, input_file: str, output_file: str, codec: str, 
                    progress_callback=None) -> Tuple[bool, str]:
-        """Run FFmpeg encoding with progress tracking"""
+        """Run FFmpeg encoding with VBR and resolution-based optimization"""
         
         try:
             # Check NVENC capabilities
             nvenc_caps = self.get_nvenc_capabilities()
             has_nvenc = any(nvenc_caps.values())
             
-            # Get encoding preset
-            preset = self.get_ffmpeg_preset(codec, quality, has_nvenc)
+            # Get encoding preset (now uses input file for resolution detection)
+            preset = self.get_ffmpeg_preset(codec, input_file, has_nvenc)
             
             # Build command
             cmd = self.build_ffmpeg_command(input_file, output_file, preset)
@@ -288,15 +352,13 @@ class FFmpegWorker:
         codecs = []
         
         if has_nvenc:
-            if nvenc_caps['av1']:
-                codecs.append({'value': 'av1_nvenc', 'name': 'AV1 (NVENC)'})
             if nvenc_caps['hevc']:
-                codecs.append({'value': 'hevc_nvenc', 'name': 'HEVC (NVENC)'})
+                codecs.append({'value': 'hevc_nvenc', 'name': 'HEVC (NVENC) - Best Quality'})
             if nvenc_caps['h264']:
-                codecs.append({'value': 'h264_nvenc', 'name': 'H.264 (NVENC)'})
+                codecs.append({'value': 'h264_nvenc', 'name': 'H.264 (NVENC) - Universal'})
         
         # Always include CPU fallback
-        codecs.append({'value': 'x265', 'name': 'HEVC (x265 CPU)'})
+        codecs.append({'value': 'x265', 'name': 'HEVC (x265 CPU) - Fallback'})
         
         return codecs
 
@@ -376,9 +438,9 @@ def get_supported_codecs():
     """Get supported codecs"""
     return ffmpeg_worker.get_supported_codecs()
 
-def run_encoding(input_file: str, output_file: str, codec: str, quality: str, progress_callback=None):
-    """Run encoding with progress tracking"""
-    return ffmpeg_worker.run_ffmpeg(input_file, output_file, codec, quality, progress_callback)
+def run_encoding(input_file: str, output_file: str, codec: str, progress_callback=None):
+    """Run encoding with progress tracking (VBR optimized)"""
+    return ffmpeg_worker.run_ffmpeg(input_file, output_file, codec, progress_callback)
 
 def stop_encoding():
     """Stop current encoding"""

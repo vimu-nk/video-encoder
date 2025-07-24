@@ -149,8 +149,7 @@ async def browse_directory(request: Request, path: str = ""):
 @app.post("/encode")
 async def start_encoding(background_tasks: BackgroundTasks, 
                         file_path: str = Form(...), 
-                        codec: str = Form("x265"),
-                        quality: str = Form("medium")):
+                        codec: str = Form("hevc_nvenc")):
     try:
         # Check if another job is already running
         if current_job["status"] not in ["idle", "completed", "failed"]:
@@ -165,19 +164,18 @@ async def start_encoding(background_tasks: BackgroundTasks,
         # Initialize job status
         current_job["filename"] = filename
         current_job["status"] = "queued"
-        current_job["log"] = f"Job queued for {filename} with codec {codec} at {quality} quality\n"
+        current_job["log"] = f"Job queued for {filename} with codec {codec} (VBR optimized)\n"
         current_job["progress"] = 0
         current_job["error"] = None
         
         # Start encoding in background
-        background_tasks.add_task(process_encoding_job, file_path, codec, quality, filename)
+        background_tasks.add_task(process_encoding_job, file_path, codec, filename)
         
         return JSONResponse({
             "success": True,
             "message": f"Encoding job started for {filename}",
             "filename": filename,
             "codec": codec,
-            "quality": quality,
             "redirect_url": "/logs"
         })
         
@@ -187,12 +185,12 @@ async def start_encoding(background_tasks: BackgroundTasks,
             "error": str(e)
         }, status_code=500)
 
-def process_encoding_job(file_path: str, codec: str, quality: str, filename: str):
-    """Process a single encoding job"""
+def process_encoding_job(file_path: str, codec: str, filename: str):
+    """Process a single encoding job with VBR optimization"""
     try:
         input_path = f"./input/{filename}"
-        # Force MKV extension for output
-        output_filename = f"{filename.rsplit('.', 1)[0]}.mkv"
+        # Force MP4 extension for output
+        output_filename = f"{filename.rsplit('.', 1)[0]}.mp4"
         output_path = f"./output/{output_filename}"
         
         # Create directories if they don't exist
@@ -204,8 +202,8 @@ def process_encoding_job(file_path: str, codec: str, quality: str, filename: str
         download_file(file_path, input_path)
         update_job_status("downloading", "✅ Download completed successfully", progress=20)
         
-        # Step 2: Encoding
-        update_job_status("encoding", f"🚀 Starting hardware encoding with codec: {codec} at {quality} quality")
+        # Step 2: Encoding with VBR optimization
+        update_job_status("encoding", f"🚀 Starting VBR encoding with codec: {codec} (optimized for 120MB/10min)")
         
         def progress_callback(progress_data):
             # Map encoding progress to overall progress (20% to 80%)
@@ -213,8 +211,8 @@ def process_encoding_job(file_path: str, codec: str, quality: str, filename: str
                 overall_progress = 20 + int((progress_data['percentage'] / 100) * 60)
                 update_job_status("encoding", f"⚡ Encoding progress: {progress_data['percentage']}%", progress=overall_progress)
         
-        # Use the encoding function with specified codec and quality
-        success, message = run_encoding(input_path, output_path, codec, quality, progress_callback)
+        # Use the encoding function with VBR settings
+        success, message = run_encoding(input_path, output_path, codec, progress_callback)
         
         if not success:
             raise Exception(f"Encoding failed: {message}")

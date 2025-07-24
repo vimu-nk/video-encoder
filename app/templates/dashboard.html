@@ -141,22 +141,9 @@
 					id="codec"
 					style="padding: 5px; width: 250px; margin-bottom: 10px"
 				>
-					{% if has_nvenc %} {% if nvenc_caps.av1 %}
-					<option value="av1_nvenc" selected>
-						AV1 (NVENC) - Best Compression
-					</option>
-					{% endif %} {% if nvenc_caps.hevc %}
-					<option
-						value="hevc_nvenc"
-						{%
-						if
-						not
-						nvenc_caps.av1
-						%}selected{%
-						endif
-						%}
-					>
-						HEVC (NVENC) - Good Compression
+					{% if has_nvenc %} {% if nvenc_caps.hevc %}
+					<option value="hevc_nvenc" selected>
+						HEVC (NVENC) - Best Quality
 					</option>
 					{% endif %} {% if nvenc_caps.h264 %}
 					<option
@@ -164,15 +151,12 @@
 						{%
 						if
 						not
-						nvenc_caps.av1
-						and
-						not
 						nvenc_caps.hevc
 						%}selected{%
 						endif
 						%}
 					>
-						H.264 (NVENC) - Fast Encoding
+						H.264 (NVENC) - Universal
 					</option>
 					{% endif %} {% endif %}
 					<option
@@ -189,55 +173,25 @@
 					</option>
 				</select>
 
-				<label
-					for="quality"
-					style="
-						display: block;
-						margin-bottom: 5px;
-						font-weight: bold;
-					"
-					>Quality Level:</label
-				>
-				<select
-					name="quality"
-					id="quality"
-					style="padding: 5px; width: 250px"
-				>
-					<option value="high">
-						High Quality (CRF 26) - Storage Optimized
-					</option>
-					<option value="medium" selected>
-						Medium Quality (CRF 30) - Balanced
-					</option>
-					<option value="low">
-						Low Quality (CRF 34) - Maximum Compression
-					</option>
-				</select>
 				<div style="font-size: 12px; color: #666; margin-top: 3px">
-					{% if has_nvenc %} {% if nvenc_caps.av1 %} 🚀 Using NVENC
-					AV1 hardware acceleration {% if gpu_info.available and
+					{% if has_nvenc %} {% if nvenc_caps.hevc %} 🚀 Using NVENC
+					HEVC hardware acceleration {% if gpu_info.available and
 					gpu_info.gpus %} ({{ gpu_info.gpus[0].name }}) {% endif %}
 					<br />
-					Premium AV1 encoding with 40-50% storage savings {% elif
-					nvenc_caps.hevc %} 🚀 Using NVENC HEVC hardware acceleration
-					{% if gpu_info.available and gpu_info.gpus %} ({{
-					gpu_info.gpus[0].name }}) {% endif %}
-					<br />
-					Efficient HEVC encoding with 35-45% storage savings {% else
-					%} 🚀 Using NVENC H.264 hardware acceleration {% if
+					Efficient HEVC VBR encoding with automatic optimization {%
+					else %} 🚀 Using NVENC H.264 hardware acceleration {% if
 					gpu_info.available and gpu_info.gpus %} ({{
 					gpu_info.gpus[0].name }}) {% endif %}
 					<br />
-					Fast H.264 encoding with 30-40% storage savings {% endif %}
-					{% else %} ⚠️ Using CPU x265 encoding (no NVENC detected)<br />
-					Slower but efficient x265 with 35-45% storage savings {%
-					endif %}
+					Fast H.264 VBR encoding with automatic optimization {% endif
+					%} {% else %} ⚠️ Using CPU x265 encoding (no NVENC
+					detected)<br />
+					Efficient x265 VBR with automatic optimization {% endif %}
 					<br />
 					• MP4 container with AAC stereo audio at 128k<br />
-					• Storage-optimized settings guarantee 25%+ file size
-					reduction<br />
-					• Quality levels: High (2Mbps max) • Medium (1.2Mbps max) •
-					Low (800k max)
+					• VBR encoding optimized for resolution and target file
+					size<br />
+					• Target: ~120MB for 10-minute videos with adaptive bitrates
 				</div>
 			</div>
 
