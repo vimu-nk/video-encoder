@@ -73,11 +73,11 @@ class FFmpegWorker:
         # Base audio settings - AAC stereo
         audio_settings = ['-c:a', 'aac', '-b:a', '128k', '-ac', '2']
         
-        # Quality mapping for different codecs - lower bitrates
+        # Quality mapping for different codecs - optimized for storage efficiency (25%+ savings)
         quality_map = {
-            'high': {'crf': 18, 'bitrate': '4000k'},
-            'medium': {'crf': 23, 'bitrate': '2000k'}, 
-            'low': {'crf': 28, 'bitrate': '1000k'}
+            'high': {'crf': 26, 'bitrate': '2000k'},
+            'medium': {'crf': 30, 'bitrate': '1200k'}, 
+            'low': {'crf': 34, 'bitrate': '800k'}
         }
         
         q_settings = quality_map.get(quality, quality_map['medium'])
