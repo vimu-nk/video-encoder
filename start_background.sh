@@ -1,32 +1,14 @@
 #!/bin/bash
 
 # Video Encoder Platform - Background Startup Script
-# This script starts the FastAPI appli    # Change to app directory
-    cd "$APP_DIR"
-    
-    # Check dependencies
-    print_status "Checking dependencies..."
-    if ! python3 -c "import fastapi, uvicorn" 2>/dev/null; then
-        print_error "Missing required Python packages. Installing..."
-        pip3 install -r requirements.txt
-    fi
-    
-    # Verify app module can be imported
-    print_status "Verifying app module..."
-    if ! python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app" 2>/dev/null; then
-        print_error "Cannot import app module. Checking structure..."
-        ls -la app/
-        print_error "Make sure you're running from the correct directory with app/ subdirectory"
-        exit 1
-    fi the background and manages it
+# This script starts the FastAPI application in the background and manages it
 
 set -e
 
 # Configuration
-APP_DIR="/app"
-VENV_DIR="/venv"
-LOG_DIR="/var/log/video-encoder"
-PID_FILE="/var/run/video-encoder.pid"
+APP_DIR="$(pwd)"
+LOG_DIR="$APP_DIR/logs"
+PID_FILE="$APP_DIR/video-encoder.pid"
 LOG_FILE="$LOG_DIR/application.log"
 ACCESS_LOG="$LOG_DIR/access.log"
 ERROR_LOG="$LOG_DIR/error.log"
@@ -109,24 +91,26 @@ start_service() {
     
     # Create necessary directories
     mkdir -p "$LOG_DIR"
-    mkdir -p "$(dirname "$PID_FILE")"
     mkdir -p "$APP_DIR/input"
     mkdir -p "$APP_DIR/output"
-    
-    # Activate virtual environment if it exists
-    if [ -d "$VENV_DIR" ]; then
-        print_status "Activating virtual environment..."
-        source "$VENV_DIR/bin/activate"
-    fi
     
     # Change to app directory
     cd "$APP_DIR"
     
     # Check dependencies
     print_status "Checking dependencies..."
-    if ! python -c "import fastapi, uvicorn" 2>/dev/null; then
+    if ! python3 -c "import fastapi, uvicorn" 2>/dev/null; then
         print_error "Missing required Python packages. Installing..."
-        pip install -r requirements.txt
+        pip3 install -r requirements.txt
+    fi
+    
+    # Verify app module can be imported
+    print_status "Verifying app module..."
+    if ! python3 -c "import sys; sys.path.insert(0, '.'); from app.main import app" 2>/dev/null; then
+        print_error "Cannot import app module. Checking structure..."
+        ls -la app/
+        print_error "Make sure you're running from the correct directory with app/ subdirectory"
+        exit 1
     fi
     
     # Check for GPU and NVENC
@@ -282,7 +266,6 @@ show_info() {
     echo
     print_status "Configuration:"
     echo "  App Directory: $APP_DIR"
-    echo "  Virtual Environment: $VENV_DIR"
     echo "  Log Directory: $LOG_DIR"
     echo "  PID File: $PID_FILE"
     echo "  Service URL: http://localhost:8000"
@@ -290,7 +273,6 @@ show_info() {
     
     print_status "File Status:"
     [ -d "$APP_DIR" ] && echo "  ✓ App directory exists" || echo "  ✗ App directory missing"
-    [ -d "$VENV_DIR" ] && echo "  ✓ Virtual environment exists" || echo "  ✗ Virtual environment missing"
     [ -f "$APP_DIR/requirements.txt" ] && echo "  ✓ Requirements file found" || echo "  ✗ Requirements file missing"
     [ -f "$APP_DIR/app/main.py" ] && echo "  ✓ Main application found" || echo "  ✗ Main application missing"
     echo
