@@ -102,6 +102,22 @@
 	<body>
 		<h1>Video Encoder Dashboard</h1>
 
+		<!-- Hardware Status -->
+		<div
+			style="background: {% if has_nvenc %}#e8f5e8{% else %}#fff3cd{% endif %}; padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid {% if has_nvenc %}#d4edda{% else %}#ffeaa7{% endif %};"
+		>
+			{% if has_nvenc %}
+			<strong>🚀 Hardware Acceleration: ENABLED</strong>
+			{% if gpu_info %}
+			<br />GPU: {{ gpu_info[0].name }} ({{ gpu_info[0].memory }}MB VRAM)
+			{% endif %} <br />Codecs Available: {% if nvenc_caps.av1_nvenc %}AV1
+			•{% endif %} {% if nvenc_caps.hevc_nvenc %}HEVC •{% endif %} {% if
+			nvenc_caps.h264_nvenc %}H.264{% endif %} {% else %}
+			<strong>⚠️ Hardware Acceleration: DISABLED</strong>
+			<br />Using CPU encoding fallback (x265) <br />Consider installing
+			NVENC-capable GPU for faster encoding {% endif %}
+		</div>
+
 		<form method="post" action="/encode" class="form-container">
 			<h2>Browse and Select Video Files</h2>
 
@@ -122,21 +138,68 @@
 				<select
 					name="preset"
 					id="preset"
-					style="padding: 5px; width: 200px"
+					style="padding: 5px; width: 250px"
 				>
-					<option value="ultrafast">Ultra Fast (x265)</option>
-					<option value="superfast">Super Fast (x265)</option>
-					<option value="veryfast">Very Fast (x265)</option>
+					{% if has_nvenc %} {% if nvenc_caps.av1_nvenc %}
+					<option value="ultrafast">Ultra Fast (AV1 NVENC)</option>
+					<option value="superfast">Super Fast (AV1 NVENC)</option>
+					<option value="veryfast">Very Fast (AV1 NVENC)</option>
 					<option value="fast" selected>
-						Fast (x265 - Recommended)
+						Fast (AV1 NVENC - Recommended)
 					</option>
-					<option value="medium">Medium (x265)</option>
-					<option value="slow_hq">Slow HQ (x265 10-bit)</option>
+					<option value="medium">Medium (AV1 NVENC)</option>
+					<option value="slow_hq">Slow HQ (AV1 NVENC)</option>
+					{% elif nvenc_caps.hevc_nvenc %}
+					<option value="ultrafast">Ultra Fast (HEVC NVENC)</option>
+					<option value="superfast">Super Fast (HEVC NVENC)</option>
+					<option value="veryfast">Very Fast (HEVC NVENC)</option>
+					<option value="fast" selected>
+						Fast (HEVC NVENC - Recommended)
+					</option>
+					<option value="medium">Medium (HEVC NVENC)</option>
+					<option value="slow_hq">Slow HQ (HEVC NVENC)</option>
+					{% else %}
+					<option value="ultrafast">Ultra Fast (H.264 NVENC)</option>
+					<option value="superfast">Super Fast (H.264 NVENC)</option>
+					<option value="veryfast">Very Fast (H.264 NVENC)</option>
+					<option value="fast" selected>
+						Fast (H.264 NVENC - Recommended)
+					</option>
+					<option value="medium">Medium (H.264 NVENC)</option>
+					<option value="slow_hq">Slow HQ (H.264 NVENC)</option>
+					{% endif %} {% else %}
+					<option value="ultrafast">Ultra Fast (x265 CPU)</option>
+					<option value="superfast">Super Fast (x265 CPU)</option>
+					<option value="veryfast">Very Fast (x265 CPU)</option>
+					<option value="fast" selected>
+						Fast (x265 CPU - Recommended)
+					</option>
+					<option value="medium">Medium (x265 CPU)</option>
+					<option value="slow_hq">Slow HQ (x265 CPU)</option>
+					{% endif %}
 				</select>
 				<div style="font-size: 12px; color: #666; margin-top: 3px">
-					Using x265 codec with resolution-based bitrates:<br />
-					• 1080p: 1.5 MB/s • 720p: 1 MB/s • 480p: 750 KB/s • 360p:
-					500 KB/s
+					{% if has_nvenc %} {% if nvenc_caps.av1_nvenc %} 🚀 Using
+					NVENC AV1 hardware acceleration {% if gpu_info %} ({{
+					gpu_info[0].name }}) {% endif %}
+					<br />
+					High-quality AV1 encoding with excellent compression {% elif
+					nvenc_caps.hevc_nvenc %} 🚀 Using NVENC HEVC hardware
+					acceleration {% if gpu_info %} ({{ gpu_info[0].name }}) {%
+					endif %}
+					<br />
+					Fast HEVC encoding with good compression {% else %} 🚀 Using
+					NVENC H.264 hardware acceleration {% if gpu_info %} ({{
+					gpu_info[0].name }}) {% endif %}
+					<br />
+					Fast H.264 encoding with GPU acceleration {% endif %} {%
+					else %} ⚠️ Using CPU x265 encoding (no NVENC detected)<br />
+					Slower than GPU acceleration but universally compatible {%
+					endif %}
+					<br />
+					• MKV container with EAC3 5.1 audio at 448k<br />
+					• Quality-optimized CRF settings: 1080p: CRF 25 • 1440p: CRF
+					24 • 4K: CRF 23
 				</div>
 			</div>
 

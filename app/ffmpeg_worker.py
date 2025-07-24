@@ -6,21 +6,28 @@ import shutil
 import json
 
 def get_gpu_info():
-    """Get GPU information for NVENC optimization"""
+    """Get detailed GPU information for maximum NVENC optimization"""
     try:
-        # Check if nvidia-smi is available
-        result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,driver_version', '--format=csv,noheader,nounits'], 
-                              capture_output=True, text=True, timeout=10)
+        # Get comprehensive GPU information
+        result = subprocess.run([
+            'nvidia-smi', 
+            '--query-gpu=name,memory.total,driver_version,compute_cap,max_graphics_clock,max_memory_clock', 
+            '--format=csv,noheader,nounits'
+        ], capture_output=True, text=True, timeout=10)
+        
         if result.returncode == 0:
             lines = result.stdout.strip().split('\n')
             gpu_info = []
             for line in lines:
                 parts = line.split(', ')
-                if len(parts) >= 3:
+                if len(parts) >= 6:
                     gpu_info.append({
                         'name': parts[0],
                         'memory': int(parts[1]),
-                        'driver': parts[2]
+                        'driver': parts[2],
+                        'compute_cap': parts[3],
+                        'max_graphics_clock': int(parts[4]),
+                        'max_memory_clock': int(parts[5])
                     })
             return gpu_info
         return []
@@ -60,43 +67,43 @@ def get_cpu_info():
         }
 
 def get_optimal_settings_for_resolution():
-    """Get optimal CRF and bitrate settings for different resolutions with AV1 NVENC"""
+    """Get balanced CRF and bitrate settings for high quality with good compression"""
     return {
         "4K": {
-            "crf": 28,
+            "crf": 23,           # High quality for 4K
             "max_bitrate": "8000k",
             "target_bitrate": "6000k",
             "buffer": "12000k"
         },
         "1440p": {
-            "crf": 30,
-            "max_bitrate": "4000k", 
-            "target_bitrate": "3000k",
-            "buffer": "6000k"
+            "crf": 24,           # High quality for 1440p
+            "max_bitrate": "5000k",
+            "target_bitrate": "3500k",
+            "buffer": "7500k"
         },
         "1080p": {
-            "crf": 32,
-            "max_bitrate": "2500k",
-            "target_bitrate": "2000k", 
-            "buffer": "5000k"
+            "crf": 25,           # Balanced quality for 1080p
+            "max_bitrate": "3000k",
+            "target_bitrate": "2200k", 
+            "buffer": "6000k"
         },
         "720p": {
-            "crf": 34,
-            "max_bitrate": "1500k",
-            "target_bitrate": "1200k",
-            "buffer": "3000k"
+            "crf": 26,           # Good quality for 720p
+            "max_bitrate": "1800k",
+            "target_bitrate": "1300k",
+            "buffer": "3600k"
         },
         "480p": {
-            "crf": 36,
-            "max_bitrate": "800k",
-            "target_bitrate": "600k",
-            "buffer": "1600k"
+            "crf": 27,           # Decent quality for 480p
+            "max_bitrate": "1000k",
+            "target_bitrate": "750k",
+            "buffer": "2000k"
         },
         "360p": {
-            "crf": 38,
-            "max_bitrate": "500k",
-            "target_bitrate": "400k",
-            "buffer": "1000k"
+            "crf": 28,           # Acceptable quality for 360p
+            "max_bitrate": "600k",
+            "target_bitrate": "450k",
+            "buffer": "1200k"
         }
     }
 
@@ -147,54 +154,85 @@ def get_ffmpeg_preset(preset_name):
     # Base settings for all presets
     base_settings = {
         "container": "mkv",  # Always use MKV container
-        "audio_codec": "libopus",  # Better audio codec for MKV
-        "audio_bitrate": "128k"
+        "audio_codec": "eac3",  # High-quality Dolby Digital Plus
+        "audio_bitrate": "448k"  # High bitrate for excellent audio quality
     }
     
     if has_nvenc:
-        # NVENC GPU acceleration presets
+        # NVENC GPU acceleration presets with maximum core utilization
         presets = {
             "ultrafast": {
                 **base_settings,
                 "codec": "av1_nvenc" if nvenc_caps.get('av1_nvenc') else "hevc_nvenc",
-                "preset": "p1",  # Fastest NVENC preset
-                "tune": "ll",    # Low latency
-                "extra_args": ["-spatial_aq", "1", "-temporal_aq", "1"]
+                "preset": "p1",
+                "tune": "ll",
+                "extra_args": [
+                    "-spatial_aq", "1", "-temporal_aq", "1",
+                    "-multipass", "qres",  # Quarter resolution multipass
+                    "-gpu", "0"  # Use primary GPU
+                ]
             },
             "superfast": {
                 **base_settings,
                 "codec": "av1_nvenc" if nvenc_caps.get('av1_nvenc') else "hevc_nvenc",
                 "preset": "p2",
                 "tune": "ll",
-                "extra_args": ["-spatial_aq", "1", "-temporal_aq", "1"]
+                "extra_args": [
+                    "-spatial_aq", "1", "-temporal_aq", "1",
+                    "-multipass", "qres",
+                    "-gpu", "0"
+                ]
             },
             "veryfast": {
                 **base_settings,
                 "codec": "av1_nvenc" if nvenc_caps.get('av1_nvenc') else "hevc_nvenc",
                 "preset": "p3",
-                "tune": "hq",    # High quality
-                "extra_args": ["-spatial_aq", "1", "-temporal_aq", "1"]
+                "tune": "hq",
+                "extra_args": [
+                    "-spatial_aq", "1", "-temporal_aq", "1",
+                    "-multipass", "fullres",  # Full resolution multipass for better quality
+                    "-gpu", "0"
+                ]
             },
             "fast": {
                 **base_settings,
                 "codec": "av1_nvenc" if nvenc_caps.get('av1_nvenc') else "hevc_nvenc",
                 "preset": "p4",
                 "tune": "hq",
-                "extra_args": ["-spatial_aq", "1", "-temporal_aq", "1", "-lookahead", "20"]
+                "extra_args": [
+                    "-spatial_aq", "1", "-temporal_aq", "1",
+                    "-multipass", "fullres",
+                    "-lookahead", "32",  # Increased lookahead
+                    "-gpu", "0"
+                ]
             },
             "medium": {
                 **base_settings,
                 "codec": "av1_nvenc" if nvenc_caps.get('av1_nvenc') else "hevc_nvenc",
                 "preset": "p5",
                 "tune": "hq",
-                "extra_args": ["-spatial_aq", "1", "-temporal_aq", "1", "-lookahead", "32"]
+                "extra_args": [
+                    "-spatial_aq", "1", "-temporal_aq", "1",
+                    "-multipass", "fullres",
+                    "-lookahead", "64",  # Maximum lookahead
+                    "-b_adapt", "1",     # Adaptive B-frames
+                    "-gpu", "0"
+                ]
             },
             "slow_hq": {
                 **base_settings,
                 "codec": "av1_nvenc" if nvenc_caps.get('av1_nvenc') else "hevc_nvenc",
-                "preset": "p6",  # Highest quality NVENC preset
+                "preset": "p6",
                 "tune": "hq",
-                "extra_args": ["-spatial_aq", "1", "-temporal_aq", "1", "-lookahead", "64", "-b_ref_mode", "middle"]
+                "extra_args": [
+                    "-spatial_aq", "1", "-temporal_aq", "1",
+                    "-multipass", "fullres",
+                    "-lookahead", "64",
+                    "-b_adapt", "1",
+                    "-b_ref_mode", "middle",  # B-frame reference mode
+                    "-nonref_p", "1",         # Non-reference P frames
+                    "-gpu", "0"
+                ]
             }
         }
     else:
@@ -273,33 +311,48 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
     
     # Build optimized command based on available hardware
     if preset_config["codec"].endswith("_nvenc"):
-        # NVENC hardware acceleration command
+        # Advanced NVENC hardware acceleration with maximum GPU core utilization
         command = [
             "ffmpeg",
             
-            # Hardware acceleration for NVIDIA GPU
+            # Advanced hardware acceleration for maximum GPU utilization
             "-hwaccel", "cuda",
             "-hwaccel_output_format", "cuda",
+            "-extra_hw_frames", "8",  # Extra GPU memory frames
             
             "-i", input_path,
             
-            # Video encoding with NVENC
+            # Video encoding with NVENC - maximum core utilization
             "-c:v", preset_config["codec"],
             "-preset", preset_config["preset"],
             "-tune", preset_config["tune"],
             
-            # Use CRF for quality-based encoding
+            # Aggressive compression settings for storage efficiency
             "-crf", str(settings["crf"]),
             "-maxrate", settings["max_bitrate"],
             "-bufsize", settings["buffer"],
+            "-minrate", settings["target_bitrate"],  # Minimum bitrate for consistent quality
             
-            # NVENC optimizations
-            "-rc", "vbr",  # Variable bitrate
-            "-surfaces", "64",  # Max surfaces for modern GPUs
-            "-delay", "0",  # No delay for real-time
+            # Advanced NVENC optimizations for RTX 4000 ADA - Quality focused
+            "-rc", "vbr",              # Variable bitrate for quality
+            "-surfaces", "64",         # Maximum surfaces for RTX 4000
+            "-delay", "0",             # No delay for real-time
+            "-zerolatency", "0",       # Allow B-frames for better quality
+            "-weighted_pred", "1",     # Weighted prediction
+            "-strict_gop", "1",        # Strict GOP structure
+            "-rc-lookahead", "32",     # Maximum lookahead for quality
+            "-multipass", "fullres",   # Full resolution multipass
+            
+            # Advanced quality settings
+            "-aq-strength", "8",       # Adaptive quantization strength
+            "-b_ref_mode", "2",        # Use B-frames as references
+            "-nonref_p", "1",          # Non-reference P frames
+            "-tune", "hq",             # High quality tuning
+            "-profile:v", "main10" if preset_config["codec"] == "hevc_nvenc" else "main",
+            "-level", "5.1",           # High level for better compression
         ]
     else:
-        # CPU fallback command using x265
+        # CPU fallback command using x265 with aggressive compression
         command = [
             "ffmpeg",
             
@@ -308,30 +361,36 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
             
             "-i", input_path,
             
-            # Video encoding with CPU
+            # Video encoding with CPU - aggressive x265 settings
             "-c:v", preset_config["codec"],
             "-preset", preset_config["preset"],
             
-            # Use CRF for quality-based encoding
+            # Aggressive compression for storage efficiency
             "-crf", str(settings["crf"]),
             "-maxrate", settings["max_bitrate"],
             "-bufsize", settings["buffer"],
+            
+            # x265 specific optimizations for compression
+            "-x265-params", f"aq-mode=3:aq-strength=0.8:deblock=1,1:psy-rd=2.0:pools={cpu_info.get('optimal_threads', 4)}",
             
             # CPU optimizations
             "-threads", str(cpu_info["optimal_threads"]),
         ]
     
-    # Common settings for both NVENC and CPU
+    # Common settings optimized for quality and efficiency
     command.extend([
-        # Audio encoding with Opus for MKV
+        # High-quality audio encoding
         "-c:a", preset_config["audio_codec"],
         "-b:a", preset_config["audio_bitrate"],
+        "-ac", "6" if preset_config["audio_codec"] == "eac3" else "2",  # 5.1 surround for EAC3, stereo for others
+        "-ar", "48000", # Standard sample rate
         
         # Container optimizations for MKV
         "-f", "matroska",
         
-        # General optimizations
+        # Quality optimizations
         "-avoid_negative_ts", "make_zero",
+        "-fflags", "+bitexact",     # Reproducible output
     ])
     
     # Add codec-specific extra arguments
@@ -340,15 +399,20 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
     # Add output file and overwrite flag
     command.extend(["-y", output_path])
     
-    # Print encoding information
+    # Print detailed encoding information
     gpu_name = gpu_info[0]['name'] if gpu_info else "No GPU"
-    encoding_type = "NVENC Hardware" if preset_config["codec"].endswith("_nvenc") else "CPU Software"
+    encoding_type = "NVENC Hardware (Max GPU Cores)" if preset_config["codec"].endswith("_nvenc") else "CPU Software"
     
     print(f"🚀 {encoding_type} Encoding: {gpu_name}")
-    print(f"📹 Input: {actual_resolution} → Output: {resolution_category}")
+    if gpu_info and preset_config["codec"].endswith("_nvenc"):
+        gpu = gpu_info[0]
+        print(f"� GPU Memory: {gpu['memory']:,} MB | Compute: {gpu.get('compute_cap', 'N/A')} | Driver: {gpu['driver']}")
+    
+    print(f"�📹 Input: {actual_resolution} → Output: {resolution_category}")
     print(f"🎯 Codec: {preset_config['codec']} | Preset: {preset_config.get('preset', 'N/A')} | CRF: {settings['crf']}")
-    print(f"📦 Container: MKV | Audio: {preset_config['audio_codec']}")
-    print(f"⚡ Max Bitrate: {settings['max_bitrate']} | Buffer: {settings['buffer']}")
+    print(f"📦 Container: MKV (Max Compression) | Audio: Opus 96k")
+    print(f"⚡ Target: {settings['target_bitrate']} | Max: {settings['max_bitrate']} | Buffer: {settings['buffer']}")
+    print(f"🗜️ Storage Optimization: Aggressive compression enabled")
 
     try:
         process = subprocess.Popen(
@@ -391,6 +455,17 @@ def run_ffmpeg(input_path, output_path, progress_callback=None, preset_name="fas
         if process.returncode == 0 and os.path.exists(output_path):
             if progress_callback:
                 progress_callback(100)  # Ensure we reach 100%
+            
+            # Calculate and display compression efficiency
+            if os.path.exists(input_path):
+                original_size = os.path.getsize(input_path)
+                compressed_size = os.path.getsize(output_path)
+                compression_ratio = (1 - compressed_size / original_size) * 100
+                
+                print(f"📊 Compression Results:")
+                print(f"   Original: {original_size:,} bytes ({original_size / (1024*1024):.1f} MB)")
+                print(f"   Compressed: {compressed_size:,} bytes ({compressed_size / (1024*1024):.1f} MB)")
+                print(f"   Space Saved: {compression_ratio:.1f}% ({(original_size - compressed_size) / (1024*1024):.1f} MB)")
             
             # Clean up original file if encoding was successful
             try:

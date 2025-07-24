@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 import os
 import asyncio
 
-from .ffmpeg_worker import run_ffmpeg
+from .ffmpeg_worker import run_ffmpeg, get_gpu_info, get_nvenc_capabilities
 from .bunny_client import list_files, download_file, upload_file
 
 app = FastAPI()
@@ -22,8 +22,20 @@ os.makedirs("output", exist_ok=True)
 if os.path.isdir("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Simple job status tracking (single job at a time)
-current_job = {"status": "idle", "log": "", "progress": 0, "filename": "", "error": None}
+# Simple job status tracking (single job at a time) with compression stats
+current_job = {
+    "status": "idle", 
+    "log": "", 
+    "progress": 0, 
+    "filename": "", 
+    "error": None,
+    "compression_stats": {
+        "original_size": 0,
+        "compressed_size": 0,
+        "compression_ratio": 0,
+        "space_saved_mb": 0
+    }
+}
 
 # CORS if calling from a browser
 app.add_middleware(
@@ -48,18 +60,34 @@ def update_job_status(status, log_message="", progress=None, error=None):
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, path: str = ""):
     try:
+        # Get hardware capabilities for dynamic dropdown
+        gpu_info = get_gpu_info()
+        nvenc_caps = get_nvenc_capabilities()
+        has_nvenc = len(gpu_info) > 0 and any(nvenc_caps.values())
+        
         files_data = await list_files(path)
         return templates.TemplateResponse("dashboard.html", {
             "request": request, 
             "files_data": files_data,
-            "current_path": path
+            "current_path": path,
+            "has_nvenc": has_nvenc,
+            "nvenc_caps": nvenc_caps,
+            "gpu_info": gpu_info
         })
     except Exception as e:
+        # Get hardware capabilities even on error
+        gpu_info = get_gpu_info()
+        nvenc_caps = get_nvenc_capabilities()
+        has_nvenc = len(gpu_info) > 0 and any(nvenc_caps.values())
+        
         return templates.TemplateResponse("dashboard.html", {
             "request": request, 
             "files_data": {"directories": [], "files": [], "current_path": path, "parent_path": ""}, 
             "error": str(e),
-            "current_path": path
+            "current_path": path,
+            "has_nvenc": has_nvenc,
+            "nvenc_caps": nvenc_caps,
+            "gpu_info": gpu_info
         })
 
 @app.get("/browse", response_class=HTMLResponse)
@@ -145,7 +173,23 @@ def process_encoding_job(file_path: str, preset: str, filename: str):
         if return_code != 0:
             raise Exception(f"NVENC encoding failed with return code: {return_code}")
         
-        update_job_status("encoding", "✅ Hardware encoding completed successfully", progress=80)
+        # Calculate compression statistics
+        if os.path.exists(input_path) and os.path.exists(output_path):
+            original_size = os.path.getsize(input_path)
+            compressed_size = os.path.getsize(output_path)
+            compression_ratio = (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
+            space_saved_mb = (original_size - compressed_size) / (1024*1024)
+            
+            current_job["compression_stats"] = {
+                "original_size": original_size,
+                "compressed_size": compressed_size,
+                "compression_ratio": round(compression_ratio, 1),
+                "space_saved_mb": round(space_saved_mb, 1)
+            }
+            
+            update_job_status("encoding", f"✅ Encoding completed! Saved {compression_ratio:.1f}% space ({space_saved_mb:.1f} MB)", progress=80)
+        else:
+            update_job_status("encoding", "✅ Hardware encoding completed successfully", progress=80)
         
         # Step 3: Upload MKV
         update_job_status("uploading", "📤 Starting upload of encoded MKV file...")
@@ -161,8 +205,14 @@ def process_encoding_job(file_path: str, preset: str, filename: str):
         except Exception as cleanup_error:
             update_job_status("cleanup", f"⚠️ Cleanup warning: {cleanup_error}")
         
-        # Job completed
-        update_job_status("completed", "🎉 Job completed successfully! MKV file encoded with NVENC AV1.", progress=100)
+        # Job completed with compression stats
+        stats = current_job["compression_stats"]
+        if stats["compression_ratio"] > 0:
+            completion_msg = f"🎉 Job completed! AV1 NVENC encoding saved {stats['compression_ratio']}% space ({stats['space_saved_mb']} MB)"
+        else:
+            completion_msg = "🎉 Job completed successfully! MKV file encoded with NVENC AV1."
+        
+        update_job_status("completed", completion_msg, progress=100)
         
     except Exception as e:
         error_msg = f"❌ Job failed: {str(e)}"
