@@ -5,9 +5,30 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 import os
 import asyncio
+import logging
+import sys
+from datetime import datetime
+from typing import Dict, List
 
-from .ffmpeg_worker import run_ffmpeg, get_gpu_info, get_nvenc_capabilities
+from .ffmpeg_worker import (
+    run_encoding, get_gpu_info, get_nvenc_capabilities, 
+    get_supported_codecs, validate_input_file, get_encoding_status, stop_encoding
+)
 from .bunny_client import list_files, download_file, upload_file
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/application.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Create logs directory
+os.makedirs("logs", exist_ok=True)
 
 app = FastAPI()
 
@@ -63,7 +84,7 @@ async def dashboard(request: Request, path: str = ""):
         # Get hardware capabilities for dynamic dropdown
         gpu_info = get_gpu_info()
         nvenc_caps = get_nvenc_capabilities()
-        has_nvenc = len(gpu_info) > 0 and any(nvenc_caps.values())
+        has_nvenc = any(nvenc_caps.values())
         
         files_data = await list_files(path)
         return templates.TemplateResponse("dashboard.html", {
@@ -78,7 +99,7 @@ async def dashboard(request: Request, path: str = ""):
         # Get hardware capabilities even on error
         gpu_info = get_gpu_info()
         nvenc_caps = get_nvenc_capabilities()
-        has_nvenc = len(gpu_info) > 0 and any(nvenc_caps.values())
+        has_nvenc = any(nvenc_caps.values())
         
         return templates.TemplateResponse("dashboard.html", {
             "request": request, 
@@ -107,7 +128,10 @@ async def browse_directory(request: Request, path: str = ""):
         })
 
 @app.post("/encode")
-async def start_encoding(background_tasks: BackgroundTasks, file_path: str = Form(...), preset: str = Form("fast")):
+async def start_encoding(background_tasks: BackgroundTasks, 
+                        file_path: str = Form(...), 
+                        codec: str = Form("x265"),
+                        quality: str = Form("medium")):
     try:
         # Check if another job is already running
         if current_job["status"] not in ["idle", "completed", "failed"]:
@@ -122,18 +146,19 @@ async def start_encoding(background_tasks: BackgroundTasks, file_path: str = For
         # Initialize job status
         current_job["filename"] = filename
         current_job["status"] = "queued"
-        current_job["log"] = f"Job queued for {filename} with preset {preset}\n"
+        current_job["log"] = f"Job queued for {filename} with codec {codec} at {quality} quality\n"
         current_job["progress"] = 0
         current_job["error"] = None
         
         # Start encoding in background
-        background_tasks.add_task(process_encoding_job, file_path, preset, filename)
+        background_tasks.add_task(process_encoding_job, file_path, codec, quality, filename)
         
         return JSONResponse({
             "success": True,
             "message": f"Encoding job started for {filename}",
             "filename": filename,
-            "preset": preset,
+            "codec": codec,
+            "quality": quality,
             "redirect_url": "/logs"
         })
         
@@ -143,7 +168,7 @@ async def start_encoding(background_tasks: BackgroundTasks, file_path: str = For
             "error": str(e)
         }, status_code=500)
 
-def process_encoding_job(file_path: str, preset: str, filename: str):
+def process_encoding_job(file_path: str, codec: str, quality: str, filename: str):
     """Process a single encoding job"""
     try:
         input_path = f"./input/{filename}"
@@ -160,18 +185,20 @@ def process_encoding_job(file_path: str, preset: str, filename: str):
         download_file(file_path, input_path)
         update_job_status("downloading", "✅ Download completed successfully", progress=20)
         
-        # Step 2: NVENC Hardware Encode
-        update_job_status("encoding", f"🚀 Starting NVENC hardware encoding with preset: {preset}")
+        # Step 2: Encoding
+        update_job_status("encoding", f"🚀 Starting hardware encoding with codec: {codec} at {quality} quality")
         
-        def progress_callback(percent):
+        def progress_callback(progress_data):
             # Map encoding progress to overall progress (20% to 80%)
-            overall_progress = 20 + int((percent / 100) * 60)
-            update_job_status("encoding", f"⚡ NVENC encoding progress: {percent}%", progress=overall_progress)
+            if 'percentage' in progress_data:
+                overall_progress = 20 + int((progress_data['percentage'] / 100) * 60)
+                update_job_status("encoding", f"⚡ Encoding progress: {progress_data['percentage']}%", progress=overall_progress)
         
-        return_code = run_ffmpeg(input_path, output_path, progress_callback=progress_callback, preset_name=preset)
+        # Use the encoding function with specified codec and quality
+        success, message = run_encoding(input_path, output_path, codec, quality, progress_callback)
         
-        if return_code != 0:
-            raise Exception(f"NVENC encoding failed with return code: {return_code}")
+        if not success:
+            raise Exception(f"Encoding failed: {message}")
         
         # Calculate compression statistics
         if os.path.exists(input_path) and os.path.exists(output_path):
@@ -248,3 +275,47 @@ async def status_page(request: Request):
 async def api_get_status():
     """API endpoint for getting current job status"""
     return current_job
+
+@app.get("/api/hardware")
+async def api_get_hardware():
+    """API endpoint for getting hardware information"""
+    try:
+        gpu_info = get_gpu_info()
+        nvenc_caps = get_nvenc_capabilities()
+        
+        return {
+            "gpu_available": gpu_info.get("available", False),
+            "gpus": gpu_info.get("gpus", []),
+            "nvenc_caps": nvenc_caps,
+            "has_nvenc": any(nvenc_caps.values())
+        }
+    except Exception as e:
+        logger.error(f"Error getting hardware info: {e}")
+        return {
+            "gpu_available": False,
+            "gpus": [],
+            "nvenc_caps": {"av1": False, "hevc": False, "h264": False},
+            "has_nvenc": False,
+            "error": str(e)
+        }
+
+@app.post("/api/stop")
+async def api_stop_encoding():
+    """API endpoint for stopping current encoding"""
+    try:
+        success, message = stop_encoding()
+        if success:
+            current_job["status"] = "idle"
+            current_job["progress"] = 0
+            update_job_status("idle", "Encoding stopped by user")
+        
+        return {
+            "success": success,
+            "message": message
+        }
+    except Exception as e:
+        logger.error(f"Error stopping encoding: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }

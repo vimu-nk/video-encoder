@@ -127,56 +127,86 @@
 
 			<div style="margin: 15px 0">
 				<label
-					for="preset"
+					for="codec"
 					style="
 						display: block;
 						margin-bottom: 5px;
 						font-weight: bold;
 					"
-					>Encoding Preset:</label
+					>Video Codec:</label
 				>
 				<select
-					name="preset"
-					id="preset"
+					name="codec"
+					id="codec"
+					style="padding: 5px; width: 250px; margin-bottom: 10px"
+				>
+					{% if has_nvenc %} {% if nvenc_caps.av1 %}
+					<option value="av1_nvenc" selected>
+						AV1 (NVENC) - Best Compression
+					</option>
+					{% endif %} {% if nvenc_caps.hevc %}
+					<option
+						value="hevc_nvenc"
+						{%
+						if
+						not
+						nvenc_caps.av1
+						%}selected{%
+						endif
+						%}
+					>
+						HEVC (NVENC) - Good Compression
+					</option>
+					{% endif %} {% if nvenc_caps.h264 %}
+					<option
+						value="h264_nvenc"
+						{%
+						if
+						not
+						nvenc_caps.av1
+						and
+						not
+						nvenc_caps.hevc
+						%}selected{%
+						endif
+						%}
+					>
+						H.264 (NVENC) - Fast Encoding
+					</option>
+					{% endif %} {% endif %}
+					<option
+						value="x265"
+						{%
+						if
+						not
+						has_nvenc
+						%}selected{%
+						endif
+						%}
+					>
+						HEVC (x265 CPU) - Fallback
+					</option>
+				</select>
+
+				<label
+					for="quality"
+					style="
+						display: block;
+						margin-bottom: 5px;
+						font-weight: bold;
+					"
+					>Quality Level:</label
+				>
+				<select
+					name="quality"
+					id="quality"
 					style="padding: 5px; width: 250px"
 				>
-					{% if has_nvenc %} {% if nvenc_caps.av1_nvenc %}
-					<option value="ultrafast">Ultra Fast (AV1 NVENC)</option>
-					<option value="superfast">Super Fast (AV1 NVENC)</option>
-					<option value="veryfast">Very Fast (AV1 NVENC)</option>
-					<option value="fast" selected>
-						Fast (AV1 NVENC - Recommended)
+					<option value="high">High Quality (CRF 18)</option>
+					<option value="medium" selected>
+						Medium Quality (CRF 23)
 					</option>
-					<option value="medium">Medium (AV1 NVENC)</option>
-					<option value="slow_hq">Slow HQ (AV1 NVENC)</option>
-					{% elif nvenc_caps.hevc_nvenc %}
-					<option value="ultrafast">Ultra Fast (HEVC NVENC)</option>
-					<option value="superfast">Super Fast (HEVC NVENC)</option>
-					<option value="veryfast">Very Fast (HEVC NVENC)</option>
-					<option value="fast" selected>
-						Fast (HEVC NVENC - Recommended)
-					</option>
-					<option value="medium">Medium (HEVC NVENC)</option>
-					<option value="slow_hq">Slow HQ (HEVC NVENC)</option>
-					{% else %}
-					<option value="ultrafast">Ultra Fast (H.264 NVENC)</option>
-					<option value="superfast">Super Fast (H.264 NVENC)</option>
-					<option value="veryfast">Very Fast (H.264 NVENC)</option>
-					<option value="fast" selected>
-						Fast (H.264 NVENC - Recommended)
-					</option>
-					<option value="medium">Medium (H.264 NVENC)</option>
-					<option value="slow_hq">Slow HQ (H.264 NVENC)</option>
-					{% endif %} {% else %}
-					<option value="ultrafast">Ultra Fast (x265 CPU)</option>
-					<option value="superfast">Super Fast (x265 CPU)</option>
-					<option value="veryfast">Very Fast (x265 CPU)</option>
-					<option value="fast" selected>
-						Fast (x265 CPU - Recommended)
-					</option>
-					<option value="medium">Medium (x265 CPU)</option>
-					<option value="slow_hq">Slow HQ (x265 CPU)</option>
-					{% endif %}
+					<option value="low">Low Quality (CRF 28)</option>
 				</select>
 				<div style="font-size: 12px; color: #666; margin-top: 3px">
 					{% if has_nvenc %} {% if nvenc_caps.av1_nvenc %} 🚀 Using
