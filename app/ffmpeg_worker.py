@@ -70,14 +70,14 @@ class FFmpegWorker:
     def get_ffmpeg_preset(self, codec: str, quality: str, has_nvenc: bool) -> Dict[str, Any]:
         """Get FFmpeg encoding preset based on codec, quality and hardware availability"""
         
-        # Base audio settings - high quality EAC3
-        audio_settings = ['-c:a', 'eac3', '-b:a', '448k']
+        # Base audio settings - AAC stereo
+        audio_settings = ['-c:a', 'aac', '-b:a', '128k', '-ac', '2']
         
-        # Quality mapping for different codecs
+        # Quality mapping for different codecs - lower bitrates
         quality_map = {
-            'high': {'crf': 18, 'bitrate': '8000k'},
-            'medium': {'crf': 23, 'bitrate': '4000k'}, 
-            'low': {'crf': 28, 'bitrate': '2000k'}
+            'high': {'crf': 18, 'bitrate': '4000k'},
+            'medium': {'crf': 23, 'bitrate': '2000k'}, 
+            'low': {'crf': 28, 'bitrate': '1000k'}
         }
         
         q_settings = quality_map.get(quality, quality_map['medium'])
