@@ -170,6 +170,7 @@ EOF
         print_success "Video Encoder started successfully (PID: $PID)"
         print_status "Application logs: $LOG_FILE"
         print_status "Service available at: http://localhost:8000"
+        print_status "External access: http://YOUR_DROPLET_IP:8000"
         
         # Wait for service to be ready
         print_status "Waiting for service to be ready..."
@@ -268,7 +269,8 @@ show_info() {
     echo "  App Directory: $APP_DIR"
     echo "  Log Directory: $LOG_DIR"
     echo "  PID File: $PID_FILE"
-    echo "  Service URL: http://localhost:8000"
+    echo "  Local URL: http://localhost:8000"
+    echo "  External URL: http://YOUR_DROPLET_IP:8000"
     echo
     
     print_status "File Status:"
