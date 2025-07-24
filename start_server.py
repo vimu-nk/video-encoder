@@ -68,9 +68,34 @@ def main():
         import uvicorn
         logger.info("Starting uvicorn server...")
         
+        # Add current directory to Python path so 'app' module can be found
+        sys.path.insert(0, str(script_dir))
+        
+        # Verify the app module can be imported
+        try:
+            from app.main import app
+            logger.info("Successfully imported app module")
+        except ImportError as e:
+            logger.error(f"Could not import app module: {e}")
+            logger.info("Trying alternative import method...")
+            
+            # Alternative: run uvicorn as subprocess
+            cmd = [
+                sys.executable, "-m", "uvicorn", 
+                "app.main:app",
+                "--host", "0.0.0.0",
+                "--port", "8000",
+                "--log-level", "info",
+                "--access-log"
+            ]
+            
+            logger.info(f"Running command: {' '.join(cmd)}")
+            subprocess.run(cmd, cwd=script_dir)
+            return
+        
         # Configure uvicorn
         config = uvicorn.Config(
-            "app.main:app",
+            app,  # Use the imported app directly
             host="0.0.0.0",
             port=8000,
             log_level="info",
