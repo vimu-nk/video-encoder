@@ -192,7 +192,7 @@ def process_encoding_job(file_path: str, codec: str, quality: str, filename: str
     try:
         input_path = f"./input/{filename}"
         # Force MKV extension for output
-        output_filename = f"{filename.rsplit('.', 1)[0]}_encoded.mkv"
+        output_filename = f"{filename.rsplit('.', 1)[0]}.mkv"
         output_path = f"./output/{output_filename}"
         
         # Create directories if they don't exist
