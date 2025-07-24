@@ -81,12 +81,24 @@ def update_job_status(status, log_message="", progress=None, error=None):
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, path: str = ""):
     try:
-        # Get hardware capabilities for dynamic dropdown
+        # Get hardware capabilities first (these should always work)
         gpu_info = get_gpu_info()
         nvenc_caps = get_nvenc_capabilities()
         has_nvenc = any(nvenc_caps.values())
         
-        files_data = await list_files(path)
+        # Try to get files from Bunny CDN
+        try:
+            files_data = await list_files(path)
+        except Exception as bunny_error:
+            logger.warning(f"Bunny CDN error: {bunny_error}")
+            # Return with empty file list but working hardware info
+            files_data = {
+                "directories": [], 
+                "files": [], 
+                "current_path": path, 
+                "parent_path": ""
+            }
+        
         return templates.TemplateResponse("dashboard.html", {
             "request": request, 
             "files_data": files_data,
@@ -96,10 +108,17 @@ async def dashboard(request: Request, path: str = ""):
             "gpu_info": gpu_info
         })
     except Exception as e:
-        # Get hardware capabilities even on error
-        gpu_info = get_gpu_info()
-        nvenc_caps = get_nvenc_capabilities()
-        has_nvenc = any(nvenc_caps.values())
+        logger.error(f"Dashboard error: {e}")
+        # Fallback with minimal working data
+        try:
+            gpu_info = get_gpu_info()
+            nvenc_caps = get_nvenc_capabilities()
+            has_nvenc = any(nvenc_caps.values())
+        except Exception as hw_error:
+            logger.error(f"Hardware detection error: {hw_error}")
+            gpu_info = {"available": False, "gpus": []}
+            nvenc_caps = {"av1": False, "hevc": False, "h264": False}
+            has_nvenc = False
         
         return templates.TemplateResponse("dashboard.html", {
             "request": request, 
@@ -271,10 +290,34 @@ async def status_page(request: Request):
     return RedirectResponse(url="/logs", status_code=301)
 
 # API endpoints for AJAX calls
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint"""
+    return {"status": "healthy", "message": "Video Encoder API is running"}
+
 @app.get("/api/status")
 async def api_get_status():
     """API endpoint for getting current job status"""
     return current_job
+
+@app.get("/api/test")
+async def api_test():
+    """Simple test endpoint to check if API is working"""
+    try:
+        gpu_info = get_gpu_info()
+        nvenc_caps = get_nvenc_capabilities()
+        return {
+            "status": "ok",
+            "gpu_info": gpu_info,
+            "nvenc_caps": nvenc_caps,
+            "message": "API is working correctly"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Error in API test"
+        }
 
 @app.get("/api/hardware")
 async def api_get_hardware():

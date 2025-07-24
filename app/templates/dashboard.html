@@ -108,11 +108,12 @@
 		>
 			{% if has_nvenc %}
 			<strong>🚀 Hardware Acceleration: ENABLED</strong>
-			{% if gpu_info %}
-			<br />GPU: {{ gpu_info[0].name }} ({{ gpu_info[0].memory }}MB VRAM)
-			{% endif %} <br />Codecs Available: {% if nvenc_caps.av1_nvenc %}AV1
-			•{% endif %} {% if nvenc_caps.hevc_nvenc %}HEVC •{% endif %} {% if
-			nvenc_caps.h264_nvenc %}H.264{% endif %} {% else %}
+			{% if gpu_info.available and gpu_info.gpus %}
+			<br />GPU: {{ gpu_info.gpus[0].name }} ({{
+			gpu_info.gpus[0].memory_total }}) {% endif %} <br />Codecs
+			Available: {% if nvenc_caps.av1 %}AV1 •{% endif %} {% if
+			nvenc_caps.hevc %}HEVC •{% endif %} {% if nvenc_caps.h264 %}H.264{%
+			endif %} {% else %}
 			<strong>⚠️ Hardware Acceleration: DISABLED</strong>
 			<br />Using CPU encoding fallback (x265) <br />Consider installing
 			NVENC-capable GPU for faster encoding {% endif %}
@@ -209,18 +210,19 @@
 					<option value="low">Low Quality (CRF 28)</option>
 				</select>
 				<div style="font-size: 12px; color: #666; margin-top: 3px">
-					{% if has_nvenc %} {% if nvenc_caps.av1_nvenc %} 🚀 Using
-					NVENC AV1 hardware acceleration {% if gpu_info %} ({{
-					gpu_info[0].name }}) {% endif %}
+					{% if has_nvenc %} {% if nvenc_caps.av1 %} 🚀 Using NVENC
+					AV1 hardware acceleration {% if gpu_info.available and
+					gpu_info.gpus %} ({{ gpu_info.gpus[0].name }}) {% endif %}
 					<br />
 					High-quality AV1 encoding with excellent compression {% elif
-					nvenc_caps.hevc_nvenc %} 🚀 Using NVENC HEVC hardware
-					acceleration {% if gpu_info %} ({{ gpu_info[0].name }}) {%
-					endif %}
+					nvenc_caps.hevc %} 🚀 Using NVENC HEVC hardware acceleration
+					{% if gpu_info.available and gpu_info.gpus %} ({{
+					gpu_info.gpus[0].name }}) {% endif %}
 					<br />
 					Fast HEVC encoding with good compression {% else %} 🚀 Using
-					NVENC H.264 hardware acceleration {% if gpu_info %} ({{
-					gpu_info[0].name }}) {% endif %}
+					NVENC H.264 hardware acceleration {% if gpu_info.available
+					and gpu_info.gpus %} ({{ gpu_info.gpus[0].name }}) {% endif
+					%}
 					<br />
 					Fast H.264 encoding with GPU acceleration {% endif %} {%
 					else %} ⚠️ Using CPU x265 encoding (no NVENC detected)<br />
